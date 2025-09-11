@@ -156,12 +156,18 @@ elif menu == "📥 Compras":
         insert_purchase(fecha, proveedor, tipo_tela, total_metros, precio_por_metro, lineas)
         st.success("✅ Compra registrada")
 
-    st.subheader("Resumen de compras")
-    df_resumen = get_compras_resumen()
-    if not df_resumen.empty:
-        st.dataframe(df_resumen, use_container_width=True)
-    else:
-        st.info("No hay compras registradas aún.")
+st.subheader("Resumen de compras")
+df_resumen = get_compras_resumen()
+if not df_resumen.empty:
+    # Formatear columnas numéricas
+    df_resumen["Total metros"] = df_resumen["Total metros"].map(lambda x: f"{x:,.2f}")
+    df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(lambda x: f"{x:,.2f}")
+    df_resumen["Rollos totales"] = df_resumen["Rollos totales"].map(lambda x: f"{x:,}")
+    df_resumen["Total USD"] = df_resumen["Total USD"].map(lambda x: f"{x:,.2f}")
+
+    st.dataframe(df_resumen, use_container_width=True)
+else:
+    st.info("No hay compras registradas aún.")
 
 # Stock
 elif menu == "📦 Stock":
@@ -209,3 +215,4 @@ elif menu == "✂️ Cortes":
     if st.button("💾 Guardar corte"):
         insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
         st.success("✅ Corte registrado y stock actualizado")
+
