@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 from datetime import date
 
 # =====================
@@ -11,9 +11,12 @@ SHEET_NAME = "textil_sistema"
 
 @st.cache_resource
 def init_connection():
-    scope = ["https://spreadsheets.google.com/feeds",
+    scope = ["https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
+
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=scope
+    )
     client = gspread.authorize(creds)
     return client
 
@@ -32,7 +35,7 @@ def insert_purchase(fecha, proveedor, tipo_tela, metros_por_rollo, precio_por_me
     total_metros = total_rollos * float(metros_por_rollo)
     total_valor = total_metros * float(precio_por_metro)
 
-    compra_id = len(ws_compras.col_values(1))  # ID simple = nro de fila
+    compra_id = len(ws_compras.col_values(1))
     ws_compras.append_row([
         compra_id, str(fecha), proveedor, tipo_tela, metros_por_rollo, precio_por_metro,
         total_rollos, total_metros, total_valor
@@ -53,16 +56,13 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     corte_id = len(ws_cortes.col_values(1))
     ws_cortes.append_row([
         corte_id, str(fecha), nro_corte, articulo, tipo_tela,
-        sum(l["rollos"] for l in lineas),  # Total rollos usados
-        consumo_total,                     # Total metros usados
-        prendas,                           # Cantidad prendas
-        consumo_x_prenda                   # Consumo por prenda
+        sum(l["rollos"] for l in lineas), consumo_total, prendas, consumo_x_prenda
     ])
 
     for l in lineas:
         ws_detalle.append_row([corte_id, l["color"], l["rollos"]])
 
-    # actualizar stock: restar rollos consumidos
+    # actualizar stock
     ws_detalle_compras = spreadsheet.worksheet("Detalle_Compras")
     data = ws_detalle_compras.get_all_records()
     df = pd.DataFrame(data)
@@ -70,10 +70,11 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     for l in lineas:
         idx = df[(df["Tipo de tela"] == tipo_tela) & (df["Color"] == l["color"])].index
         if not idx.empty:
-            row = idx[0] + 2  # compensar encabezado
+            row = idx[0] + 2  # +2 por encabezado y base 1
             new_value = int(df.loc[idx[0], "Rollos"]) - l["rollos"]
-            if new_value < 0: new_value = 0
-            ws_detalle_compras.update_cell(row, 4, new_value)  # col 4 = Rollos
+            if new_value < 0: 
+                new_value = 0
+            ws_detalle_compras.update_cell(row, 4, new_value)
 
 # =====================
 # CONSULTAS
@@ -108,7 +109,7 @@ if menu == "📥 Compras":
 
     st.subheader("Colores y rollos")
     lineas = []
-    for i in range(3):  # por ahora 3 filas fijas
+    for i in range(3):
         col1, col2 = st.columns([2,1])
         with col1:
             color = st.text_input(f"Color {i+1}")
@@ -149,7 +150,7 @@ elif menu == "✂️ Cortes":
     articulo = st.text_input("Artículo")
 
     df_stock = get_stock_resumen()
-    telas = df_stock["Tipo de tela"].unique()
+    telas = df_stock["Tipo de tela"].unique() if not df_stock.empty else []
     tipo_tela = st.selectbox("Tela usada", telas if len(telas) else ["---"])
 
     colores = df_stock[df_stock["Tipo de tela"] == tipo_tela]["Color"].unique() if len(df_stock) else []
@@ -161,7 +162,6 @@ elif menu == "✂️ Cortes":
         if rollos_usados > 0:
             lineas.append({"color": c, "rollos": rollos_usados})
 
-    # calcular metros totales
     ws_compras = spreadsheet.worksheet("Compras")
     compras_data = ws_compras.get_all_records()
     compras_df = pd.DataFrame(compras_data)
@@ -175,7 +175,7 @@ elif menu == "✂️ Cortes":
     consumo_x_prenda = consumo_total / prendas if prendas > 0 else 0
 
     st.metric("Consumo total (m)", consumo_total)
-    st.metric("Consumo por prenda (m)", round(consumo_x_prenda,2))
+    st.metric("Consumo por prenda (m)", round(consumo_x_prenda, 2))
 
     if st.button("💾 Guardar corte"):
         insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
