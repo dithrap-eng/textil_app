@@ -148,26 +148,38 @@ if menu == "📥 Compras":
         insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
         st.success("✅ Compra registrada")
 
+    # -------------------------------
+    # Resumen de compras
+    # -------------------------------
     st.subheader("Resumen de compras")
-    df_resumen = get_compras_resumen()
+    df_resumen = get_compras()
 
     if not df_resumen.empty:
-        # convertir a numéricos antes de formatear
-        for col in ["Total metros", "Precio por metro", "Total USD", "Precio promedio x rollo", "Rollos totales"]:
-            if col in df_resumen.columns:
-                df_resumen[col] = pd.to_numeric(df_resumen[col], errors="coerce")
+        # 🔧 Normalizar columnas numéricas para evitar multiplicar por 10
+        cols_numericas = [
+            "Total metros",
+            "Precio por metro (USD)",
+            "Rollos totales",
+            "Total USD",
+            "Precio promedio x rollo"
+        ]
 
-        # aplicar formato argentino SOLO en pantalla
-        for col in ["Total metros", "Precio por metro", "Total USD", "Precio promedio x rollo"]:
-            if col in df_resumen.columns:
-                df_resumen[col] = df_resumen[col].map(
-                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else ""
-                )
-        if "Rollos totales" in df_resumen.columns:
-            df_resumen["Rollos totales"] = df_resumen["Rollos totales"].map(
-                lambda x: f"{int(x):,}".replace(",", ".") if pd.notnull(x) else ""
+        for col in cols_numericas:
+            df_resumen[col] = (
+                df_resumen[col]
+                .astype(str)                              # aseguramos string
+                .str.replace(".", "", regex=False)        # quitamos separador de miles
+                .str.replace(",", ".", regex=False)       # convertimos coma a punto
+                .astype(float)                            # pasamos a número
             )
 
+        # ✅ Formato de miles y decimales correcto
+        df_resumen["Total metros"] = df_resumen["Total metros"].map(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_resumen["Total USD"] = df_resumen["Total USD"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        # 🔎 Mostrar tabla
         st.dataframe(df_resumen, use_container_width=True)
     else:
         st.info("No hay compras registradas aún.")
@@ -259,3 +271,4 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
