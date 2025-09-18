@@ -215,7 +215,8 @@ elif menu == "📦 Stock":
             df_compras["Precio promedio x rollo"] = pd.to_numeric(df_compras["Precio promedio x rollo"], errors="coerce")
             precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
             total_valorizado = total_rollos * precio_promedio_global
-            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))e("X", "."))
+            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
 # -------------------------------
 # CORTES
 # -------------------------------
@@ -271,6 +272,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
