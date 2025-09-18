@@ -216,59 +216,67 @@ elif menu == "📦 Stock":
         
         # 1. Mostrar precio promedio por tipo de tela seleccionado
         if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            # Convertir a numérico
-            df_compras["Precio promedio x rollo"] = pd.to_numeric(
-                df_compras["Precio promedio x rollo"].astype(str)
-                .str.replace("USD", "").str.replace(" ", "")
-                .str.replace(".", "").str.replace(",", "."),
-                errors="coerce"
-            )
+            # Función para convertir correctamente el formato argentino
+            def convertir_formato_argentino(valor):
+                if pd.isna(valor):
+                    return 0.0
+                if isinstance(valor, (int, float)):
+                    return float(valor)
+                valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
+                try:
+                    # Si tiene formato 15.012,00 -> convertir a 15012.00
+                    if "." in valor_str and "," in valor_str:
+                        return float(valor_str.replace(".", "").replace(",", "."))
+                    # Si tiene formato 150,12 -> convertir a 150.12
+                    elif "," in valor_str:
+                        return float(valor_str.replace(",", "."))
+                    else:
+                        return float(valor_str)
+                except:
+                    return 0.0
             
             # Función para formatear en estilo argentino
             def formato_argentino_moneda(valor):
                 if pd.isna(valor) or valor == 0:
                     return "USD 0,00"
+                # Dividir por 100 si el valor es muy grande (para corregir el error)
+                if valor > 1000:  # Si el valor es muy grande, probablemente está mal interpretado
+                    valor = valor / 100
                 formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 return f"USD {formatted}"
+            
+            # Convertir la columna de precios
+            df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
             
             # Calcular precio promedio por tipo de tela si hay filtro
             if filtro_tela:
                 for tela in filtro_tela:
                     precio_promedio_tela = df_compras[
                         df_compras["Tipo de tela"] == tela
-                    ]["Precio promedio x rollo"].mean()
+                    ]["Precio promedio x rollo num"].mean()
                     
-                    if not pd.isna(precio_promedio_tela):
+                    if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
                         st.write(f"💲 Precio promedio x rollo ({tela}): {formato_argentino_moneda(precio_promedio_tela)}")
             
-            # 2. Calcular valor estimado CORRECTAMENTE
-            # Primero calcular el precio promedio global de las telas seleccionadas
+            # 2. Calcular valor estimado
             if filtro_tela:
-                # Precio promedio ponderado por tipo de tela
                 precios_telas = {}
                 for tela in filtro_tela:
                     precio_tela = df_compras[
                         df_compras["Tipo de tela"] == tela
-                    ]["Precio promedio x rollo"].mean()
-                    if not pd.isna(precio_tela):
+                    ]["Precio promedio x rollo num"].mean()
+                    if not pd.isna(precio_tela) and precio_tela > 0:
                         precios_telas[tela] = precio_tela
                 
                 if precios_telas:
-                    # Si solo hay un tipo de tela, usar ese precio
                     if len(precios_telas) == 1:
                         precio_promedio_global = list(precios_telas.values())[0]
                     else:
-                        # Para múltiples telas, calcular promedio simple
                         precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
                     
                     total_valorizado = total_rollos * precio_promedio_global
                     st.write(f"💲 Valor estimado (rollos × precio promedio): {formato_argentino_moneda(total_valorizado)}")
-            else:
-                # Si no hay filtro por tela, usar promedio general
-                precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
-                if not pd.isna(precio_promedio_global):
-                    total_valorizado = total_rollos * precio_promedio_global
-                    st.write(f"💲 Valor estimado (rollos × precio promedio): {formato_argentino_moneda(total_valorizado)}")
+                    
 # -------------------------------
 # CORTES
 # -------------------------------
@@ -324,6 +332,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
