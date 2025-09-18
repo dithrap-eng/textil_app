@@ -323,12 +323,12 @@ elif menu == "✂ Cortes":
     if not df_cortes.empty:
         # Asegurar columnas numéricas
         df_cortes["Consumo total (m)"] = pd.to_numeric(df_cortes["Consumo total (m)"], errors="coerce")
-        df_cortes["Cantidad de prendas"] = pd.to_numeric(df_cortes["Cantidad de prendas"], errors="coerce")
+        df_cortes["Prendas"] = pd.to_numeric(df_cortes["Prendas"], errors="coerce")
         df_cortes["Consumo x prenda (m)"] = pd.to_numeric(df_cortes["Consumo x prenda (m)"], errors="coerce")
         
         # Calcular consumo por prenda si no existe
         if "Consumo x prenda (m)" not in df_cortes.columns or df_cortes["Consumo x prenda (m)"].isna().all():
-            df_cortes["Consumo x prenda (m)"] = df_cortes["Consumo total (m)"] / df_cortes["Cantidad de prendas"]
+            df_cortes["Consumo x prenda (m)"] = df_cortes["Consumo total (m)"] / df_cortes["Prendas"]
         
         # Formatear para mostrar
         df_mostrar_cortes = df_cortes.copy()
@@ -341,7 +341,7 @@ elif menu == "✂ Cortes":
         
         # Mostrar columnas relevantes
         columnas_cortes = ["Fecha", "Número de corte", "Artículo", "Tipo de tela", 
-                          "Consumo total (m)", "Cantidad de prendas", "Consumo x prenda (m)"]
+                          "Consumo total (m)", "Prendas", "Consumo x prenda (m)"]
         
         columnas_existentes = [col for col in columnas_cortes if col in df_mostrar_cortes.columns]
         st.dataframe(df_mostrar_cortes[columnas_existentes], use_container_width=True)
@@ -368,6 +368,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
