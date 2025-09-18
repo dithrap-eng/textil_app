@@ -149,76 +149,41 @@ if menu == "📥 Compras":
         insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
         st.success("✅ Compra registrada")
 
-    # -------------------------------
-    # Resumen de compras
-    # -------------------------------
-    st.subheader("Resumen de compras")
-    df_resumen = get_compras_resumen()
+# -------------------------------
+# Resumen de compras (VERSIÓN SIMPLIFICADA)
+# -------------------------------
+st.subheader("Resumen de compras")
+df_resumen = get_compras_resumen()
 
-    if not df_resumen.empty:
-        # Función para convertir formato argentino a float
-        def argentino_a_float(valor):
-            if isinstance(valor, (int, float)):
-                return float(valor)
-            if isinstance(valor, str):
-                # Remover "USD" y espacios si existen
-                valor = valor.replace("USD", "").strip()
-                # Reemplazar punto (separador de miles) por nada
-                # Reemplazar coma (decimal) por punto
-                valor = valor.replace(".", "").replace(",", ".")
-                try:
-                    return float(valor)
-                except ValueError:
-                    return 0.0
-            return 0.0
-        
-        # Función para formatear en estilo argentino
-        def formato_argentino(valor, es_moneda=False):
-            if pd.isna(valor) or valor == 0:
-                return ""
-            try:
-                # Formatear con 2 decimales
-                formatted = f"{valor:,.2f}"
-                # Reemplazar coma por punto para miles y punto por coma para decimales
-                formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-                if es_moneda:
-                    return f"USD {formatted}"
-                return formatted
-            except:
-                return ""
-        
-        # Convertir columnas numéricas
-        df_resumen["Total metros"] = df_resumen["Total metros"].apply(argentino_a_float)
-        df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].apply(argentino_a_float)
-        df_resumen["Rollos totales"] = df_resumen["Rollos totales"].apply(argentino_a_float)
-        df_resumen["Total USD"] = df_resumen["Total USD"].apply(argentino_a_float)
-        
-        # Calcular precio promedio por rollo CORRECTAMENTE
-        df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
-        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].replace([np.inf, -np.inf], 0)
-        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].fillna(0)
-        
-        # Crear una copia para mostrar con formato argentino
-        df_mostrar = df_resumen.copy()
-        
-        # Aplicar formato argentino a las columnas
-        df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(formato_argentino)
-        df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(lambda x: formato_argentino(x, True))
-        df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(lambda x: formato_argentino(x, True))
-        df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(lambda x: formato_argentino(x, True))
-        df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].apply(lambda x: f"{int(x):,}".replace(",", ".") if not pd.isna(x) else "")
-        
-        # Mostrar solo las columnas relevantes
-        columnas_a_mostrar = ["ID", "Fecha", "Proveedor", "Tipo de tela", "Total metros", 
-                              "Precio por metro (USD)", "Rollos totales", "Total USD", "Precio promedio x rollo"]
-        
-        columnas_existentes = [col for col in columnas_a_mostrar if col in df_mostrar.columns]
-        
-        # Mostrar tabla
-        st.dataframe(df_mostrar[columnas_existentes], use_container_width=True)
-        
-    else:
-        st.info("No hay compras registradas aún.")
+if not df_resumen.empty:
+    # Convertir directamente (ahora Sheets usa formato internacional)
+    df_resumen["Total metros"] = pd.to_numeric(df_resumen["Total metros"], errors="coerce")
+    df_resumen["Precio por metro (USD)"] = pd.to_numeric(df_resumen["Precio por metro (USD)"], errors="coerce")
+    df_resumen["Rollos totales"] = pd.to_numeric(df_resumen["Rollos totales"], errors="coerce")
+    df_resumen["Total USD"] = pd.to_numeric(df_resumen["Total USD"], errors="coerce")
+    
+    # Calcular precio promedio
+    df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
+    df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].fillna(0)
+    
+    # Función para formatear en estilo argentino (solo para visualización)
+    def formato_argentino(valor, es_moneda=False):
+        if pd.isna(valor) or valor == 0:
+            return ""
+        formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"USD {formatted}" if es_moneda else formatted
+    
+    # Preparar datos para mostrar
+    df_mostrar = df_resumen.copy()
+    df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(formato_argentino)
+    df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(lambda x: formato_argentino(x, True))
+    df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(lambda x: formato_argentino(x, True))
+    df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(lambda x: formato_argentino(x, True))
+    df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].astype(int).astype(str)
+    
+    st.dataframe(df_mostrar, use_container_width=True)
+else:
+    st.info("No hay compras registradas aún.")
 
 # -------------------------------
 # STOCK
@@ -306,6 +271,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
