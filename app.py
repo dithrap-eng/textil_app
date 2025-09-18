@@ -469,29 +469,39 @@ elif menu == "🏭 Talleres":
         # SECTION 1: Asignar cortes a talleres
         st.subheader("📤 Asignar corte a taller")
         
+        # CORRECCIÓN: Asegurar que el nombre de la variable sea consistente
         cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
         
         if not cortes_sin_asignar.empty:
             with st.form("form_asignar_taller"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    # CORRECCIÓN: Usar "Número de corte" (con tilde)
-                    corte_seleccionado = st.selectbox(
-                        "Seleccionar corte",
-                        cortes_sin_asignar["Número de corte"].unique()  # ¡Corregido aquí!
-                    )
+                    # Verificar que la columna "Número de corte" existe en df_cortes
+                    if "Número de corte" in cortes_sin_asignar.columns:
+                        corte_seleccionado = st.selectbox(
+                            "Seleccionar corte",
+                            cortes_sin_asignar["Número de corte"].unique()
+                        )
+                    else:
+                        st.error("La columna 'Número de corte' no existe en los datos")
+                        corte_seleccionado = None
+                    
                     taller = st.text_input("Nombre del taller")
                     fecha_envio = st.date_input("Fecha de envío", value=date.today())
                 
                 with col2:
-                    info_corte = cortes_sin_asignar[cortes_sin_asignar["Número de corte"] == corte_seleccionado].iloc[0]
-                    st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
-                    st.write(f"**Prendas totales:** {info_corte.get('Cantidad de prendas', '')}")
-                    st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
+                    if corte_seleccionado is not None:
+                        info_corte = cortes_sin_asignar[cortes_sin_asignar["Número de corte"] == corte_seleccionado].iloc[0]
+                        st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
+                        st.write(f"**Prendas totales:** {info_corte.get('Cantidad de prendas', '')}")
+                        st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
+                    else:
+                        st.info("Selecciona un corte para ver la información")
                 
-                # CORRECCIÓN: Agregar el botón de submit dentro del formulario
+                # CORRECCIÓN: Botón de submit correctamente colocado
                 submitted = st.form_submit_button("✅ Asignar a taller")
-                if submitted:
+                
+                if submitted and corte_seleccionado is not None:
                     # Guardar asignación
                     nuevo_registro = {
                         "ID Corte": info_corte.get("ID", ""),
@@ -508,7 +518,9 @@ elif menu == "🏭 Talleres":
                     ws_talleres.append_row(list(nuevo_registro.values()))
                     st.success(f"Corte {corte_seleccionado} asignado a {taller}")
                     st.rerun()
-        
+                elif submitted:
+                    st.error("Por favor selecciona un corte válido")
+              
         
         # SECTION 2: Actualizar estados de talleres
         st.subheader("🔄 Actualizar estado de producción")
@@ -581,6 +593,7 @@ elif menu == "🏭 Talleres":
             st.dataframe(df_talleres, use_container_width=True)
     else:
         st.info("No hay cortes registrados para gestionar talleres.")
+
 
 
 
