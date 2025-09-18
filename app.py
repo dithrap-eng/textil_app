@@ -152,10 +152,10 @@ if menu == "📥 Compras":
     # Resumen de compras
     # -------------------------------
     st.subheader("Resumen de compras")
-    df_resumen = read_sheet("Compras")
+    df_resumen = get_compras_resumen()
 
     if not df_resumen.empty:
-        # 🔧 Normalizar columnas numéricas para evitar multiplicar por 10
+        # 🔧 Normalizar columnas numéricas
         cols_numericas = [
             "Total metros",
             "Precio por metro (USD)",
@@ -167,23 +167,28 @@ if menu == "📥 Compras":
         for col in cols_numericas:
             if col in df_resumen.columns:
                 df_resumen[col] = (
-                    df_resumen[col]
-                    .astype(str)                              # aseguramos string
-                    .str.replace(".", "", regex=False)        # quitamos separador de miles
-                    .str.replace(",", ".", regex=False)       # convertimos coma a punto
-                    .astype(float)                            # pasamos a número
+                    pd.to_numeric(df_resumen[col], errors="coerce")
                 )
 
         # ✅ Formato de miles y decimales correcto
-        df_resumen["Total metros"] = df_resumen["Total metros"].map(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        df_resumen["Total USD"] = df_resumen["Total USD"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].map(lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_resumen["Total metros"] = df_resumen["Total metros"].map(
+            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_resumen["Total USD"] = df_resumen["Total USD"].map(
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].map(
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
         
         # 🔎 Mostrar tabla
         st.dataframe(df_resumen, use_container_width=True)
     else:
         st.info("No hay compras registradas aún.")
+
 # -------------------------------
 # STOCK
 # -------------------------------
@@ -271,5 +276,6 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
