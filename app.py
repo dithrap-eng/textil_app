@@ -251,69 +251,6 @@ elif menu == "📦 Stock":
             precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
             total_valorizado = total_rollos * precio_promedio_global
             st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-# -------------------------------
-# STOCK
-# -------------------------------
-elif menu == "📦 Stock":
-    st.header("Stock disponible (en rollos)")
-
-    df = get_stock_resumen()
-    if df.empty:
-        st.warning("No hay stock registrado")
-    else:
-        filtro_tela = st.multiselect("Filtrar por tela", df["Tipo de tela"].unique())
-        filtro_color = st.multiselect("Filtrar por color", df["Color"].unique())
-
-        df_filtrado = df.copy()
-        if filtro_tela:
-            df_filtrado = df_filtrado[df_filtrado["Tipo de tela"].isin(filtro_tela)]
-        if filtro_color:
-            df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
-
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        total_rollos = df_filtrado["Rollos"].sum()
-        st.subheader("Totales de la selección")
-        st.write(f"📦 Total de rollos: {total_rollos}")
-
-        df_compras = get_compras_resumen()
-        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            df_compras["Precio promedio x rollo"] = pd.to_numeric(df_compras["Precio promedio x rollo"], errors="coerce")
-            precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
-            total_valorizado = total_rollos * precio_promedio_global
-            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-# -------------------------------
-# STOCK
-# -------------------------------
-elif menu == "📦 Stock":
-    st.header("Stock disponible (en rollos)")
-
-    df = get_stock_resumen()
-    if df.empty:
-        st.warning("No hay stock registrado")
-    else:
-        filtro_tela = st.multiselect("Filtrar por tela", df["Tipo de tela"].unique())
-        filtro_color = st.multiselect("Filtrar por color", df["Color"].unique())
-
-        df_filtrado = df.copy()
-        if filtro_tela:
-            df_filtrado = df_filtrado[df_filtrado["Tipo de tela"].isin(filtro_tela)]
-        if filtro_color:
-            df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
-
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        total_rollos = df_filtrado["Rollos"].sum()
-        st.subheader("Totales de la selección")
-        st.write(f"📦 Total de rollos: {total_rollos}")
-
-        df_compras = get_compras_resumen()
-        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            df_compras["Precio promedio x rollo"] = pd.to_numeric(df_compras["Precio promedio x rollo"], errors="coerce")
-            precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
-            total_valorizado = total_rollos * precio_promedio_global
-            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 # -------------------------------
 # CORTES
@@ -370,6 +307,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
