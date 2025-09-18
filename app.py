@@ -37,7 +37,7 @@ def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros,
     compra_id = len(ws_compras.col_values(1))  # ID simple = nro de fila
     ws_compras.append_row([
         compra_id, str(fecha), proveedor, tipo_tela,
-        total_metros, precio_por_metro, total_rollos, total_valor, precio_promedio_rollo
+        float(total_metros), float(precio_por_metro), total_rollos, total_valor, precio_promedio_rollo
     ])
 
     for l in lineas:
@@ -74,7 +74,6 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
                 new_value = 0
             ws_detalle_compras.update_cell(row, 4, new_value)  # col 4 = Rollos
 
-
 # =====================
 # CONSULTAS
 # =====================
@@ -108,7 +107,6 @@ def insert_proveedor(nombre):
     ws = spreadsheet.worksheet("Proveedores")
     ws.append_row([nombre])
 
-
 # =====================
 # INTERFAZ STREAMLIT
 # =====================
@@ -125,7 +123,7 @@ menu = st.sidebar.radio(
 if menu == "📥 Compras":
     st.header("Registrar compra de tela")
 
-    fecha = st.date_input("Fecha", value=date.today())
+    fecha = st.date_input("Fecha", value=date.today(), key="fecha_compra")
     proveedores = get_proveedores()
     proveedor = st.selectbox("Proveedor", proveedores if proveedores else ["---"])
     tipo_tela = st.text_input("Tipo de tela")
@@ -144,31 +142,34 @@ if menu == "📥 Compras":
         if color and rollos > 0:
             lineas.append({"color": color, "rollos": rollos})
 
+    # Totales en vivo
+    if lineas:
+        total_rollos = sum(l["rollos"] for l in lineas)
+        total_valor = total_metros * precio_por_metro
+        st.info(f"📦 Total rollos cargados: {total_rollos}")
+        st.info(f"💲 Total $: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
     if st.button("💾 Guardar compra"):
-        insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
-        st.success("✅ Compra registrada")
+        if lineas:
+            insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
+            st.success("✅ Compra registrada")
+        else:
+            st.warning("Debe ingresar al menos un color con rollos.")
 
     st.subheader("Resumen de compras")
     df_resumen = get_compras_resumen()
 
     if not df_resumen.empty:
-        # Formato argentino con separador de miles "." y decimales ","
-        df_resumen["Total metros"] = df_resumen["Total metros"].map(
-            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(
-            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        df_resumen["Rollos totales"] = df_resumen["Rollos totales"].map(
-            lambda x: f"{x:,}".replace(",", ".")
-        )
-        df_resumen["Total USD"] = df_resumen["Total USD"].map(
-            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].map(
-            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-
+        # Formato argentino
+        for col in ["Total metros", "Precio por metro", "Total USD", "Precio promedio x rollo"]:
+            if col in df_resumen.columns:
+                df_resumen[col] = df_resumen[col].map(
+                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+        if "Rollos totales" in df_resumen.columns:
+            df_resumen["Rollos totales"] = df_resumen["Rollos totales"].map(
+                lambda x: f"{x:,}".replace(",", ".")
+            )
         st.dataframe(df_resumen, use_container_width=True)
     else:
         st.info("No hay compras registradas aún.")
@@ -202,6 +203,72 @@ elif menu == "📦 Stock":
         # Para valorizar los rollos
         df_compras = get_compras_resumen()
         if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
-            total_valorizado = total_rollos * precio_promedio_global
-            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            try:
+                precios = pd.to_numeric(df_compras["Precio promedio x rollo"], errors="coerce")
+                precios = precios.dropna()
+                if not precios.empty:
+                    precio_promedio_global = precios.mean()
+                    total_valorizado = total_rollos * precio_promedio_global
+                    st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            except Exception as e:
+                st.error(f"Error al calcular valorización: {e}")
+
+# -------------------------------
+# CORTES
+# -------------------------------
+elif menu == "✂ Cortes":
+    st.header("Registrar corte de tela")
+
+    fecha = st.date_input("Fecha de corte", value=date.today(), key="fecha_corte")
+    nro_corte = st.text_input("Número de corte")
+    articulo = st.text_input("Artículo")
+
+    df_stock = get_stock_resumen()
+    telas = df_stock["Tipo de tela"].unique() if not df_stock.empty else []
+    tipo_tela = st.selectbox("Tela usada", telas if len(telas) else ["---"])
+
+    colores = df_stock[df_stock["Tipo de tela"] == tipo_tela]["Color"].unique() if len(df_stock) else []
+    colores_sel = st.multiselect("Colores usados", colores)
+
+    lineas = []
+    for c in colores_sel:
+        stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == c)]["Rollos"].sum())
+        st.write(f"Stock disponible de {c}: {stock_color} rollos")
+        rollos_usados = st.number_input(f"Rollos consumidos de {c}", min_value=0, step=1, key=f"corte_{c}")
+        if rollos_usados > 0:
+            lineas.append({"color": c, "rollos": rollos_usados})
+
+    consumo_total = st.number_input("Consumo total (m)", min_value=0.0, step=0.5)
+    prendas = st.number_input("Cantidad de prendas", min_value=1, step=1)
+    consumo_x_prenda = consumo_total / prendas if prendas > 0 else 0
+
+    st.metric("Consumo por prenda (m)", round(consumo_x_prenda, 2))
+
+    if st.button("💾 Guardar corte"):
+        if lineas and tipo_tela != "---":
+            insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
+            st.success("✅ Corte registrado y stock actualizado")
+        else:
+            st.warning("Seleccione al menos un color con rollos consumidos")
+
+# -------------------------------
+# PROVEEDORES
+# -------------------------------
+elif menu == "🏭 Proveedores":
+    st.header("Administrar proveedores")
+
+    nuevo = st.text_input("Nuevo proveedor")
+    if st.button("➕ Agregar proveedor"):
+        if nuevo:
+            insert_proveedor(nuevo)
+            st.success(f"Proveedor '{nuevo}' agregado")
+            proveedores = get_proveedores()  # refrescar
+        else:
+            st.warning("Ingrese un nombre válido")
+
+    st.subheader("Listado de proveedores")
+    proveedores = get_proveedores()
+    if proveedores:
+        st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
+    else:
+        st.info("No hay proveedores registrados aún.")
