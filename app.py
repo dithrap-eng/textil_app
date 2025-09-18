@@ -152,7 +152,7 @@ if menu == "📥 Compras":
     # Resumen de compras
     # -------------------------------
     st.subheader("Resumen de compras")
-    df_resumen = get_compras()
+    df_resumen = read_sheet("Compras")
 
     if not df_resumen.empty:
         # 🔧 Normalizar columnas numéricas para evitar multiplicar por 10
@@ -165,13 +165,14 @@ if menu == "📥 Compras":
         ]
 
         for col in cols_numericas:
-            df_resumen[col] = (
-                df_resumen[col]
-                .astype(str)                              # aseguramos string
-                .str.replace(".", "", regex=False)        # quitamos separador de miles
-                .str.replace(",", ".", regex=False)       # convertimos coma a punto
-                .astype(float)                            # pasamos a número
-            )
+            if col in df_resumen.columns:
+                df_resumen[col] = (
+                    df_resumen[col]
+                    .astype(str)                              # aseguramos string
+                    .str.replace(".", "", regex=False)        # quitamos separador de miles
+                    .str.replace(",", ".", regex=False)       # convertimos coma a punto
+                    .astype(float)                            # pasamos a número
+                )
 
         # ✅ Formato de miles y decimales correcto
         df_resumen["Total metros"] = df_resumen["Total metros"].map(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -183,7 +184,6 @@ if menu == "📥 Compras":
         st.dataframe(df_resumen, use_container_width=True)
     else:
         st.info("No hay compras registradas aún.")
-
 # -------------------------------
 # STOCK
 # -------------------------------
@@ -271,4 +271,5 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
