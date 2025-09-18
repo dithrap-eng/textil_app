@@ -187,36 +187,23 @@ if not df_resumen.empty:
     df_mostrar = df_resumen.copy()
     
     # Función para formatear en estilo argentino
-    def formato_argentino(valor, es_moneda=False):
-        if pd.isna(valor) or valor == 0:
-            return ""
-        try:
-            # Formatear con 2 decimales
-            formatted = f"{valor:,.2f}"
-            # Reemplazar coma por punto para miles y punto por coma para decimales
-            formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-            if es_moneda:
-                return f"USD {formatted}"
-            return formatted
-        except:
-            return ""
-    
-    # Aplicar formato argentino a las columnas
-    df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(formato_argentino)
-    df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(lambda x: formato_argentino(x, True))
-    df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(lambda x: formato_argentino(x, True))
-    df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(lambda x: formato_argentino(x, True))
-    df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].apply(lambda x: f"{int(x):,}".replace(",", ".") if not pd.isna(x) else "")
-    
-    # Mostrar solo las columnas relevantes
-    columnas_a_mostrar = ["ID", "Fecha", "Proveedor", "Tipo de tela", "Total metros", 
-                          "Precio por metro (USD)", "Rollos totales", "Total USD", "Precio promedio x rollo"]
-    
-    columnas_existentes = [col for col in columnas_a_mostrar if col in df_mostrar.columns]
-    
-    # Mostrar tabla
-    st.dataframe(df_mostrar[columnas_existentes], use_container_width=True)
-    
+def formato_argentino(valor, es_moneda=False):
+    if pd.isna(valor) or valor == 0:
+        return ""
+    try:
+        # Formatear con 2 decimales
+        formatted = f"{valor:,.2f}"
+        # Reemplazar coma por punto para miles y punto por coma para decimales
+        formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+        if es_moneda:
+            return f"USD {formatted}"
+        return formatted
+    except:
+        return ""
+
+# restart tasks
+st.dataframe(df_mostrar[columnas_existentes], use_container_width=True)
+
 else:
     st.info("No hay compras registradas aún.")
 
@@ -307,6 +294,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
