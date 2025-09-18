@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
+import numpy as np 
 
 # =====================
 # CONFIGURACIÓN GOOGLE SHEETS (con secrets)
@@ -148,67 +149,76 @@ if menu == "📥 Compras":
         insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
         st.success("✅ Compra registrada")
 
-    # -------------------------------
-    # Resumen de compras (VERSIÓN CORREGIDA)
-    # -------------------------------
-    st.subheader("Resumen de compras")
-    df_resumen = get_compras_resumen()
+# -------------------------------
+# Resumen de compras (VERSIÓN CORREGIDA)
+# -------------------------------
+st.subheader("Resumen de compras")
+df_resumen = get_compras_resumen()
 
-    if not df_resumen.empty:
-        # Asegurarnos de que tenemos las columnas necesarias
-        required_cols = ["Total metros", "Precio por metro (USD)", "Rollos totales", "Total USD"]
-        for col in required_cols:
-            if col not in df_resumen.columns:
-                st.error(f"Falta la columna: {col}")
-                break
-        
-        # Convertir a numérico
-        df_resumen["Total metros"] = pd.to_numeric(df_resumen["Total metros"], errors="coerce")
-        df_resumen["Precio por metro (USD)"] = pd.to_numeric(df_resumen["Precio por metro (USD)"], errors="coerce")
-        df_resumen["Rollos totales"] = pd.to_numeric(df_resumen["Rollos totales"], errors="coerce")
-        df_resumen["Total USD"] = pd.to_numeric(df_resumen["Total USD"], errors="coerce")
-        
-        # Calcular precio promedio por rollo
-        if "Precio promedio x rollo" not in df_resumen.columns:
-            df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
-        else:
-            df_resumen["Precio promedio x rollo"] = pd.to_numeric(
-                df_resumen["Precio promedio x rollo"], errors="coerce"
-            )
-            # Recalcular si hay valores faltantes
-            mask = df_resumen["Precio promedio x rollo"].isna()
-            df_resumen.loc[mask, "Precio promedio x rollo"] = (
-                df_resumen.loc[mask, "Total USD"] / df_resumen.loc[mask, "Rollos totales"]
-            )
-        
-        # Crear una copia para mostrar con formato
-        df_mostrar = df_resumen.copy()
-        
-        # Aplicar formato a las columnas numéricas (CORREGIDO)
-        df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(
-            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
-        df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(
-            lambda x: f"USD {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
-        df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(
-            lambda x: f"USD {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
-        df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(
-            lambda x: f"USD {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
-        df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].apply(
-            lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else ""
-        )
-        
-        # Mostrar tabla
-        st.dataframe(df_mostrar, use_container_width=True)
-        
-        # Mostrar también los datos numéricos sin formato para debugging
-        with st.expander("Ver datos numéricos sin formato (solo para debugging)"):
-            st.dataframe(df_resumen)
-    else:
-        st.info("No hay compras registradas aún.")
+if not df_resumen.empty:
+    # Asegurarnos de que tenemos las columnas necesarias
+    required_cols = ["Total metros", "Precio por metro (USD)", "Rollos totales", "Total USD"]
+    for col in required_cols:
+        if col not in df_resumen.columns:
+            st.error(f"Falta la columna: {col}")
+    
+    # Convertir a numérico (limpiar posibles formatos de texto)
+    df_resumen["Total metros"] = pd.to_numeric(
+        df_resumen["Total metros"].astype(str).str.replace(".", "").str.replace(",", "."), 
+        errors="coerce"
+    )
+    df_resumen["Precio por metro (USD)"] = pd.to_numeric(
+        df_resumen["Precio por metro (USD)"].astype(str).str.replace("USD", "").str.replace(" ", "").str.replace(",", "."), 
+        errors="coerce"
+    )
+    df_resumen["Rollos totales"] = pd.to_numeric(df_resumen["Rollos totales"], errors="coerce")
+    df_resumen["Total USD"] = pd.to_numeric(
+        df_resumen["Total USD"].astype(str).str.replace("USD", "").str.replace(" ", "").str.replace(",", "."), 
+        errors="coerce"
+    )
+    
+    # Calcular precio promedio por rollo CORRECTAMENTE
+    df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
+    df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].replace([np.inf, -np.inf], 0)
+    
+    # Crear una copia para mostrar con formato
+    df_mostrar = df_resumen.copy()
+    
+    # Formatear números correctamente (punto para miles, coma para decimales)
+    def format_currency(value):
+        if pd.isna(value):
+            return ""
+        return f"USD {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    def format_number(value):
+        if pd.isna(value):
+            return ""
+        return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    def format_integer(value):
+        if pd.isna(value):
+            return ""
+        return f"{value:,.0f}".replace(",", ".")
+    
+    # Aplicar formato a las columnas
+    df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(format_number)
+    df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(format_currency)
+    df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(format_currency)
+    df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(format_currency)
+    df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].apply(format_integer)
+    
+    # Mostrar solo las columnas relevantes en el orden correcto
+    columnas_a_mostrar = ["ID", "Fecha", "Proveedor", "Tipo de tela", "Total metros", 
+                          "Precio por metro (USD)", "Rollos totales", "Total USD", "Precio promedio x rollo"]
+    
+    # Filtrar solo las columnas que existen
+    columnas_existentes = [col for col in columnas_a_mostrar if col in df_mostrar.columns]
+    
+    # Mostrar tabla
+    st.dataframe(df_mostrar[columnas_existentes], use_container_width=True)
+    
+else:
+    st.info("No hay compras registradas aún.")
 
 # -------------------------------
 # STOCK
@@ -329,6 +339,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
