@@ -307,44 +307,92 @@ elif menu == "✂ Cortes":
         st.success("✅ Corte registrado y stock actualizado")
 
     # -------------------------------
-    # RESUMEN DE CORTES
+    # RESUMEN DE CORTES (VERSIÓN CORREGIDA)
     # -------------------------------
     st.subheader("📊 Resumen de cortes registrados")
     
-    # Función para obtener cortes
     def get_cortes_resumen():
-        ws_cortes = spreadsheet.worksheet("Cortes")
-        data = ws_cortes.get_all_records()
-        df = pd.DataFrame(data)
-        return df
+        try:
+            ws_cortes = spreadsheet.worksheet("Cortes")
+            data = ws_cortes.get_all_records()
+            df = pd.DataFrame(data)
+            return df
+        except:
+            return pd.DataFrame()
     
     df_cortes = get_cortes_resumen()
     
     if not df_cortes.empty:
-        # Asegurar columnas numéricas
-        df_cortes["Consumo total (m)"] = pd.to_numeric(df_cortes["Consumo total (m)"], errors="coerce")
-        df_cortes["Prendas"] = pd.to_numeric(df_cortes["Prendas"], errors="coerce")
-        df_cortes["Consumo x prenda (m)"] = pd.to_numeric(df_cortes["Consumo x prenda (m)"], errors="coerce")
+        # Mostrar las columnas disponibles para debugging
+        st.write(f"Columnas disponibles: {list(df_cortes.columns)}")
         
-        # Calcular consumo por prenda si no existe
-        if "Consumo x prenda (m)" not in df_cortes.columns or df_cortes["Consumo x prenda (m)"].isna().all():
-            df_cortes["Consumo x prenda (m)"] = df_cortes["Consumo total (m)"] / df_cortes["Prendas"]
+        # Buscar nombres alternativos de columnas
+        column_mapping = {
+            'consumo_total': ['Consumo total (m)', 'Consumo total', 'Consumo', 'Total metros'],
+            'cantidad_prendas': ['Cantidad de prendas', 'Prendas', 'Cantidad prendas', 'Cantidad'],
+            'consumo_x_prenda': ['Consumo x prenda (m)', 'Consumo por prenda', 'Metros por prenda']
+        }
+        
+        # Encontrar los nombres reales de las columnas
+        real_columns = {}
+        for key, possible_names in column_mapping.items():
+            for name in possible_names:
+                if name in df_cortes.columns:
+                    real_columns[key] = name
+                    break
+        
+        # Convertir columnas numéricas si existen
+        if 'consumo_total' in real_columns:
+            df_cortes[real_columns['consumo_total']] = pd.to_numeric(
+                df_cortes[real_columns['consumo_total']], errors="coerce"
+            )
+        
+        if 'cantidad_prendas' in real_columns:
+            df_cortes[real_columns['cantidad_prendas']] = pd.to_numeric(
+                df_cortes[real_columns['cantidad_prendas']], errors="coerce"
+            )
+        
+        # Calcular consumo por prenda si no existe la columna
+        if 'consumo_x_prenda' not in real_columns and 'consumo_total' in real_columns and 'cantidad_prendas' in real_columns:
+            df_cortes['Consumo x prenda (m)'] = df_cortes[real_columns['consumo_total']] / df_cortes[real_columns['cantidad_prendas']]
+            real_columns['consumo_x_prenda'] = 'Consumo x prenda (m)'
         
         # Formatear para mostrar
         df_mostrar_cortes = df_cortes.copy()
-        df_mostrar_cortes["Consumo total (m)"] = df_mostrar_cortes["Consumo total (m)"].apply(
-            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
-        df_mostrar_cortes["Consumo x prenda (m)"] = df_mostrar_cortes["Consumo x prenda (m)"].apply(
-            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
-        )
         
-        # Mostrar columnas relevantes
-        columnas_cortes = ["Fecha", "Número de corte", "Artículo", "Tipo de tela", 
-                          "Consumo total (m)", "Prendas", "Consumo x prenda (m)"]
+        # Formatear columnas numéricas
+        if 'consumo_total' in real_columns:
+            df_mostrar_cortes[real_columns['consumo_total']] = df_mostrar_cortes[real_columns['consumo_total']].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
+            )
         
-        columnas_existentes = [col for col in columnas_cortes if col in df_mostrar_cortes.columns]
-        st.dataframe(df_mostrar_cortes[columnas_existentes], use_container_width=True)
+        if 'consumo_x_prenda' in real_columns:
+            df_mostrar_cortes[real_columns['consumo_x_prenda']] = df_mostrar_cortes[real_columns['consumo_x_prenda']].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
+            )
+        
+        # Mostrar columnas relevantes (usar nombres reales)
+        columnas_a_mostrar = []
+        for col in ["Fecha", "Número de corte", "Artículo", "Tipo de tela"]:
+            if col in df_mostrar_cortes.columns:
+                columnas_a_mostrar.append(col)
+        
+        # Agregar columnas numéricas si existen
+        for key in ['consumo_total', 'cantidad_prendas', 'consumo_x_prenda']:
+            if key in real_columns:
+                columnas_a_mostrar.append(real_columns[key])
+        
+        st.dataframe(df_mostrar_cortes[columnas_a_mostrar], use_container_width=True)
+        
+        # Mostrar estadísticas
+        if 'consumo_total' in real_columns and 'cantidad_prendas' in real_columns:
+            total_consumo = df_cortes[real_columns['consumo_total']].sum()
+            total_prendas = df_cortes[real_columns['cantidad_prendas']].sum()
+            consumo_promedio = total_consumo / total_prendas if total_prendas > 0 else 0
+            
+            st.write(f"**Total general:** {total_prendas:,.0f} prendas, {total_consumo:,.2f} m de tela")
+            st.write(f"**Consumo promedio:** {consumo_promedio:,.2f} m por prenda")
+            
     else:
         st.info("No hay cortes registrados aún.")
 
@@ -368,6 +416,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
