@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 from datetime import date
 
 # =====================
@@ -13,8 +13,8 @@ SHEET_NAME = "textil_sistema"
 def init_connection():
     scope = ["https://spreadsheets.google.com/feeds",
              "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gcp_service_account"], scope
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=scope
     )
     client = gspread.authorize(creds)
     return client
@@ -31,12 +31,13 @@ def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros,
     ws_detalle = spreadsheet.worksheet("Detalle_Compras")
 
     total_rollos = sum(int(l["rollos"]) for l in lineas)
-    total_valor = total_metros * float(precio_por_metro)
+    total_valor = float(total_metros) * float(precio_por_metro)
+    precio_promedio_rollo = total_valor / total_rollos if total_rollos > 0 else 0
 
     compra_id = len(ws_compras.col_values(1))  # ID simple = nro de fila
     ws_compras.append_row([
         compra_id, str(fecha), proveedor, tipo_tela,
-        total_metros, precio_por_metro, total_rollos, total_valor
+        total_metros, precio_por_metro, total_rollos, total_valor, precio_promedio_rollo
     ])
 
     for l in lineas:
@@ -156,13 +157,16 @@ if menu == "📥 Compras":
             lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
         df_resumen["Precio por metro (USD)"] = df_resumen["Precio por metro (USD)"].map(
-            lambda x: "$ " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
         df_resumen["Rollos totales"] = df_resumen["Rollos totales"].map(
             lambda x: f"{x:,}".replace(",", ".")
         )
         df_resumen["Total USD"] = df_resumen["Total USD"].map(
-            lambda x: "$ " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].map(
+            lambda x: "USD " + f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
         st.dataframe(df_resumen, use_container_width=True)
@@ -190,58 +194,14 @@ elif menu == "📦 Stock":
 
         st.dataframe(df_filtrado, use_container_width=True)
 
-# -------------------------------
-# CORTES
-# -------------------------------
-elif menu == "✂ Cortes":
-    st.header("Registrar corte de tela")
+        # Totales
+        total_rollos = df_filtrado["Rollos"].sum()
+        st.subheader("Totales de la selección")
+        st.write(f"📦 Total de rollos: {total_rollos}")
 
-    fecha = st.date_input("Fecha de corte", value=date.today())
-    nro_corte = st.text_input("Número de corte")
-    articulo = st.text_input("Artículo")
-
-    df_stock = get_stock_resumen()
-    telas = df_stock["Tipo de tela"].unique() if not df_stock.empty else []
-    tipo_tela = st.selectbox("Tela usada", telas if len(telas) else ["---"])
-
-    colores = df_stock[df_stock["Tipo de tela"] == tipo_tela]["Color"].unique() if len(df_stock) else []
-    colores_sel = st.multiselect("Colores usados", colores)
-
-    lineas = []
-    for c in colores_sel:
-        stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == c)]["Rollos"].sum())
-        st.write(f"Stock disponible de {c}: {stock_color} rollos")
-        rollos_usados = st.number_input(f"Rollos consumidos de {c}", min_value=0, step=1, key=f"corte_{c}")
-        if rollos_usados > 0:
-            lineas.append({"color": c, "rollos": rollos_usados})
-
-    consumo_total = st.number_input("Consumo total (m)", min_value=0.0, step=0.5)
-    prendas = st.number_input("Cantidad de prendas", min_value=1, step=1)
-    consumo_x_prenda = consumo_total / prendas if prendas > 0 else 0
-
-    st.metric("Consumo por prenda (m)", round(consumo_x_prenda, 2))
-
-    if st.button("💾 Guardar corte"):
-        insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
-        st.success("✅ Corte registrado y stock actualizado")
-
-# -------------------------------
-# PROVEEDORES
-# -------------------------------
-elif menu == "🏭 Proveedores":
-    st.header("Administrar proveedores")
-
-    nuevo = st.text_input("Nuevo proveedor")
-    if st.button("➕ Agregar proveedor"):
-        if nuevo:
-            insert_proveedor(nuevo)
-            st.success(f"Proveedor '{nuevo}' agregado")
-        else:
-            st.warning("Ingrese un nombre válido")
-
-    st.subheader("Listado de proveedores")
-    proveedores = get_proveedores()
-    if proveedores:
-        st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
-    else:
-        st.info("No hay proveedores registrados aún.")
+        # Para valorizar los rollos
+        df_compras = get_compras_resumen()
+        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
+            precio_promedio_global = df_compras["Precio promedio x rollo"].mean()
+            total_valorizado = total_rollos * precio_promedio_global
+            st.write(f"💲 Valor estimado (rollos × precio promedio): USD {total_valorizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
