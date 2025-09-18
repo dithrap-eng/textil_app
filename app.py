@@ -185,69 +185,8 @@ if menu == "📥 Compras":
     else:
         st.info("No hay compras registradas aún.")
 
+
 # -------------------------------
-# STOCK
-# -------------------------------
-elif menu == "📦 Stock":
-    st.header("Stock disponible (en rollos)")
-
-    df = get_stock_resumen()
-    if df.empty:
-        st.warning("No hay stock registrado")
-    else:
-        filtro_tela = st.multiselect("Filtrar por tela", df["Tipo de tela"].unique())
-        filtro_color = st.multiselect("Filtrar por color", df["Color"].unique())
-
-        df_filtrado = df.copy()
-        if filtro_tela:
-            df_filtrado = df_filtrado[df_filtrado["Tipo de tela"].isin(filtro_tela)]
-        if filtro_color:
-            df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
-
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        total_rollos = df_filtrado["Rollos"].sum()
-        
-        # Obtener el resumen de compras para calcular precios promedios
-        df_compras = get_compras_resumen()
-        
-        st.subheader("Totales de la selección")
-        st.write(f"📦 Total de rollos: {total_rollos}")
-        
-        # 1. Mostrar precio promedio por tipo de tela seleccionado
-        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            # Función para convertir correctamente el formato argentino
-            def convertir_formato_argentino(valor):
-                if pd.isna(valor):
-                    return 0.0
-                if isinstance(valor, (int, float)):
-                    return float(valor)
-                valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
-                try:
-                    # Si tiene formato 15.012,00 -> convertir a 15012.00
-                    if "." in valor_str and "," in valor_str:
-                        return float(valor_str.replace(".", "").replace(",", "."))
-                    # Si tiene formato 150,12 -> convertir a 150.12
-                    elif "," in valor_str:
-                        return float(valor_str.replace(",", "."))
-                    else:
-                        return float(valor_str)
-                except:
-                    return 0.0
-            
-            # Función para formatear en estilo argentino
-            def formato_argentino_moneda(valor):
-                if pd.isna(valor) or valor == 0:
-                    return "USD 0,00"
-                # Dividir por 100 si el valor es muy grande (para corregir el error)
-                if valor > 1000:  # Si el valor es muy grande, probablemente está mal interpretado
-                    valor = valor / 100
-                formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                return f"USD {formatted}"
-            
-            # Convertir la columna de precios
-            df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
-            # -------------------------------
 # STOCK
 # -------------------------------
 elif menu == "📦 Stock":
@@ -387,6 +326,7 @@ elif menu == "🏭 Proveedores":
         st.table(pd.DataFrame(proveedores, columns=["Proveedor"]))
     else:
         st.info("No hay proveedores registrados aún.")
+
 
 
 
