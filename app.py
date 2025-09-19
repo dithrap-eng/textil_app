@@ -466,8 +466,23 @@ elif menu == "🏭 Talleres":
         except:
             df_talleres = pd.DataFrame()
         
-        # SECTION 1: Asignar cortes a talleres - MEJORADO
+        # SECTION 1: Asignar cortes a talleres - CORREGIDO
         st.subheader("📤 Asignar corte a taller")
+        
+        # Crear la variable cortes_sin_asignar con manejo de errores
+        try:
+            if not df_talleres.empty:
+                cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))]
+            else:
+                cortes_sin_asignar = df_cortes.copy()
+        except Exception as e:
+            st.error(f"Error al filtrar cortes: {str(e)}")
+            cortes_sin_asignar = pd.DataFrame()
+        
+        # DEBUG: Mostrar información para diagnosticar
+        st.write(f"Cortes totales: {len(df_cortes)}")
+        st.write(f"Talleres existentes: {len(df_talleres)}")
+        st.write(f"Cortes sin asignar: {len(cortes_sin_asignar)}")
         
         # Mostrar cortes pendientes de asignar
         if not cortes_sin_asignar.empty:
@@ -510,9 +525,12 @@ elif menu == "🏭 Talleres":
                         "Días Transcurridos": 0
                     }
                     
-                    ws_talleres.append_row(list(nuevo_registro.values()))
-                    st.success(f"Corte {corte_seleccionado} asignado a {taller}")
-                    st.rerun()
+                    try:
+                        ws_talleres.append_row(list(nuevo_registro.values()))
+                        st.success(f"Corte {corte_seleccionado} asignado a {taller}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {str(e)}")
         else:
             st.success("✅ Todos los cortes han sido asignados a talleres")
         
@@ -694,6 +712,7 @@ elif menu == "🏭 Talleres":
                 df_mostrar["Fecha Envío"] = df_mostrar["Fecha Envío"].dt.strftime("%Y-%m-%d")
                 
                 st.dataframe(df_mostrar, use_container_width=True)
+
 
 
 
