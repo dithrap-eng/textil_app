@@ -439,16 +439,80 @@ elif menu == "🏭 Proveedores":
 
 
 # -------------------------------
-# TALLERES (VERSIÓN CORREGIDA)
+# TALLERES (VERSIÓN COMPLETA KANBAN)
 # -------------------------------
 elif menu == "🏭 Talleres":
-    # AGREGAR IMPORTACIÓN DE TIME AL INICIO
     import time
     
-    # Configuración de estilo (se mantiene igual)
-    # ... [código de estilo anterior] ...
+    # Configuración de estilo KANBAN
+    st.markdown("""
+        <style>
+        .metric-card {
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .pending { border-left-color: #FFA726; background-color: #FFF3E0; }
+        .production { border-left-color: #42A5F5; background-color: #E3F2FD; }
+        .delivered { border-left-color: #66BB6A; background-color: #E8F5E9; }
+        .alert { border-left-color: #EF5350; background-color: #FFEBEE; }
+        
+        .kanban-column {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
+        }
+        
+        .corte-card {
+            background: white;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 4px solid #42A5F5;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        
+        .corte-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .corte-card.urgente {
+            border-left-color: #EF5350;
+            background-color: #FFEBEE;
+        }
+        
+        .corte-card.completado {
+            border-left-color: #66BB6A;
+            background-color: #E8F5E9;
+        }
+        
+        .progress-bar {
+            height: 15px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin: 8px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #42A5F5, #64B5F6);
+        }
+        
+        .green-button {
+            background-color: #4CAF50 !important;
+            color: white !important;
+            border: none !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
-    st.header("📋 Gestión de Talleres")
+    st.header("📋 Tablero de Producción - Sistema Kanban")
     
     # Obtener datos
     df_cortes = get_cortes_resumen()
@@ -471,256 +535,295 @@ elif menu == "🏭 Talleres":
         except:
             df_talleres = pd.DataFrame()
         
-        # ... [resto del código igual hasta la sección de estado de producción] ...
+        # Calcular métricas para el header
+        cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
         
-        # SECCIÓN 2: ESTADO DE PRODUCCIÓN (CORREGIDO)
-        st.subheader("🔄 Estado de producción")
+        en_produccion = len(df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]) if not df_talleres.empty else 0
+        entregados = len(df_talleres[df_talleres["Estado"].str.contains("ENTREGADO", na=False)]) if not df_talleres.empty else 0
         
-        if not df_talleres.empty:
-            # Filtrar solo cortes en producción
-            df_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
-            
-            if not df_produccion.empty:
-                st.write(f"**{len(df_produccion)} cortes en producción:**")
-                
-                for idx, taller_row in df_produccion.iterrows():
-                    # Obtener información del corte original
-                    try:
-                        corte_original = df_cortes[df_cortes["ID"].astype(str) == str(taller_row.get("ID Corte"))].iloc[0]
-                        total_prendas = int(corte_original.get('Prendas', 0))
-                    except:
-                        total_prendas = 0
-                    
-                    # Calcular días transcurridos
-                    dias_transcurridos = 0
-                    fecha_envio_str = ""
-                    if taller_row.get("Fecha Envío"):
-                        try:
-                            fecha_envio = pd.to_datetime(taller_row.get("Fecha Envío"))
-                            dias_transcurridos = (date.today() - fecha_envio.date()).days
-                            fecha_envio_str = fecha_envio.strftime("%d-%m-%Y")
-                        except:
-                            dias_transcurridos = 0
-                    
-                    # Barra de progreso
-                    progreso = min(dias_transcurridos / 20, 1.0)
-                    
-                    with st.expander(f"🧵 {taller_row.get('Artículo', '')} - {taller_row.get('Taller', '')} ({dias_transcurridos} días)", expanded=True):
-                        # Barra de progreso visual
-                        st.markdown(f"""
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: {progreso*100}%"></div>
-                            </div>
-                            <div style="text-align: center; margin: -25px 0 20px 0;">
-                                <strong>{dias_transcurridos}/20 días</strong>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            prendas_recibidas = int(taller_row.get('Prendas Recibidas', 0))
-                            prendas_falladas = int(taller_row.get('Prendas Falladas', 0))
-                            faltante = max(0, total_prendas - prendas_recibidas)
-                            
-                            st.write(f"**📦 Prendas recibidas:** {prendas_recibidas}/{total_prendas}")
-                            st.write(f"**❌ Prendas falladas:** {prendas_falladas}")
-                            st.write(f"**⚠️ Faltante:** {faltante}")
-                            
-                            if prendas_recibidas > 0:
-                                porcentaje_falla = (prendas_falladas / prendas_recibidas) * 100
-                                st.write(f"**📊 % de falla:** {porcentaje_falla:.1f}%")
-                        
-                        with col2:
-                            st.write(f"**📅 Enviado:** {fecha_envio_str}")
-                            st.write(f"**🎯 Entrega estimada:** {taller_row.get('Fecha Entrega', 'Pendiente')}")
-                        
-                        # Formulario de actualización (CORREGIDO)
-                        with st.form(f"form_update_{taller_row.get('ID Corte')}"):
-                            col_up1, col_up2 = st.columns(2)
-                            
-                            with col_up1:
-                                # CORRECCIÓN: Permitir cualquier valor en prendas falladas
-                                nuevas_recibidas = st.number_input(
-                                    "Prendas recibidas",
-                                    min_value=0,
-                                    max_value=total_prendas,
-                                    value=prendas_recibidas,
-                                    key=f"rec_{idx}"
-                                )
-                                
-                                # CORRECCIÓN: Quitar la restricción de max_value
-                                nuevas_falladas = st.number_input(
-                                    "Prendas falladas",
-                                    min_value=0,
-                                    # max_value=nuevas_recibidas,  # ¡ESTA LÍNEA ES EL PROBLEMA!
-                                    value=prendas_falladas,
-                                    key=f"fall_{idx}",
-                                    help="Cantidad de prendas que vinieron con fallas"
-                                )
-                            
-                            with col_up2:
-                                # Determinar estado automáticamente
-                                faltante_nuevo = total_prendas - nuevas_recibidas
-                                
-                                if nuevas_recibidas == 0:
-                                    estado_auto = "EN PRODUCCIÓN"
-                                elif faltante_nuevo > 0 and nuevas_falladas == 0:
-                                    estado_auto = "ENTREGADO c/FALTANTES"
-                                elif nuevas_falladas > 0 and faltante_nuevo == 0:
-                                    estado_auto = "ENTREGADO c/FALLAS"
-                                elif nuevas_falladas > 0 and faltante_nuevo > 0:
-                                    estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
-                                else:
-                                    estado_auto = "ENTREGADO"
-                                
-                                st.write(f"**Estado automático:** {estado_auto}")
-                                
-                                fecha_entrega = st.date_input(
-                                    "Fecha de entrega",
-                                    value=date.today(),
-                                    key=f"fecha_ent_{idx}"
-                                )
-                            
-                            # CORRECCIÓN: Validación adicional para evitar errores
-                            if st.form_submit_button("💾 Actualizar Producción"):
-                                # Validar que las fallas no sean mayores que lo recibido
-                                if nuevas_falladas > nuevas_recibidas:
-                                    st.error("❌ Las prendas falladas no pueden ser más que las recibidas")
-                                else:
-                                    # Actualizar registro en Google Sheets
-                                    try:
-                                        # Encontrar la fila correcta
-                                        all_data = ws_talleres.get_all_values()
-                                        row_index = None
-                                        
-                                        for i, row in enumerate(all_data[1:], start=2):
-                                            if str(row[0]) == str(taller_row.get("ID Corte")):
-                                                row_index = i
-                                                break
-                                        
-                                        if row_index:
-                                            # Actualizar valores
-                                            ws_talleres.update_cell(row_index, 7, nuevas_recibidas)
-                                            ws_talleres.update_cell(row_index, 8, nuevas_falladas)
-                                            ws_talleres.update_cell(row_index, 9, estado_auto)
-                                            ws_talleres.update_cell(row_index, 6, fecha_entrega.strftime("%Y-%m-%d"))
-                                            
-                                            st.success("✅ Producción actualizada correctamente")
-                                            time.sleep(2)
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ No se encontró el registro")
-                                    
-                                    except Exception as e:
-                                        st.error(f"❌ Error al actualizar: {str(e)}")
-            else:
-                st.info("📭 No hay cortes en producción actualmente")
-        
-       
- # SECCIÓN 3: DASHBOARD ANALÍTICO
-        st.subheader("📈 Dashboard de Seguimiento")
-        
-        if not df_talleres.empty:
-            # Filtros
-            col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
-            
-            with col_filtro1:
-                talleres_disponibles = df_talleres["Taller"].unique().tolist()
-                taller_filtro = st.multiselect(
-                    "Filtrar por taller",
-                    options=talleres_disponibles,
-                    default=talleres_disponibles
-                )
-            
-            with col_filtro2:
-                estados_disponibles = df_talleres["Estado"].unique().tolist()
-                estado_filtro = st.multiselect(
-                    "Filtrar por estado",
-                    options=estados_disponibles,
-                    default=["EN PRODUCCIÓN"]
-                )
-            
-            with col_filtro3:
-                dias_filtro = st.slider(
-                    "Días en producción (mínimo)",
-                    min_value=0,
-                    max_value=60,
-                    value=0
-                )
-            
-            # Aplicar filtros
-            df_filtrado = df_talleres[
-                (df_talleres["Taller"].isin(taller_filtro)) &
-                (df_talleres["Estado"].isin(estado_filtro))
-            ].copy()
-            
-            # Calcular días transcurridos para el filtro
+        # Calcular alertas (más de 20 días)
+        alertas = 0
+        if not df_talleres.empty and "Fecha Envío" in df_talleres.columns:
             try:
-                df_filtrado["Fecha Envío"] = pd.to_datetime(df_filtrado["Fecha Envío"], errors='coerce')
-                df_filtrado["Días Transcurridos"] = (date.today() - df_filtrado["Fecha Envío"].dt.date).dt.days
-                df_filtrado = df_filtrado[df_filtrado["Días Transcurridos"] >= dias_filtro]
+                df_talleres["Fecha Envío"] = pd.to_datetime(df_talleres["Fecha Envío"], errors='coerce')
+                df_talleres["Días Transcurridos"] = (date.today() - df_talleres["Fecha Envío"].dt.date).dt.days
+                alertas = len(df_talleres[(df_talleres["Días Transcurridos"] > 20) & (df_talleres["Estado"] == "EN PRODUCCIÓN")])
             except:
-                pass
+                alertas = 0
+        
+        # HEADER CON MÉTRICAS (TARJETAS DE COLORES)
+        st.subheader("📊 Resumen General")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(f'<div class="metric-card pending"><h4>📋 {len(cortes_sin_asignar)}</h4><p>Cortes sin asignar</p></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown(f'<div class="metric-card production"><h4>🔄 {en_produccion}</h4><p>En producción</p></div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown(f'<div class="metric-card delivered"><h4>✅ {entregados}</h4><p>Entregados</p></div>', unsafe_allow_html=True)
+        with col4:
+            st.markdown(f'<div class="metric-card alert"><h4>⚠️ {alertas}</h4><p>Con alertas</p></div>', unsafe_allow_html=True)
+        
+        # SECCIÓN 1: ASIGNAR CORTES (TABLA EDITABLE)
+        st.subheader("📤 Asignar Cortes a Talleres")
+        
+        if not cortes_sin_asignar.empty:
+            st.info(f"📋 **Cortes pendientes de asignar:** {len(cortes_sin_asignar)}")
             
-            # Métricas por taller
-            st.write("### 📊 Métricas por Taller")
+            # Crear DataFrame para edición
+            df_editable = cortes_sin_asignar.copy()
+            df_editable["Taller"] = ""
+            df_editable["Fecha Envío"] = date.today().strftime("%Y-%m-%d")
+            df_editable["Asignar"] = False
             
-            for taller in taller_filtro:
-                df_taller = df_filtrado[df_filtrado["Taller"] == taller]
-                if not df_taller.empty:
-                    en_prod_taller = len(df_taller[df_taller["Estado"] == "EN PRODUCCIÓN"])
-                    entregados_taller = len(df_taller[df_taller["Estado"] == "ENTREGADO"])
-                    
-                    col_met1, col_met2, col_met3 = st.columns(3)
-                    
-                    with col_met1:
-                        st.metric(f"{taller}", f"{len(df_taller)} cortes")
-                    
-                    with col_met2:
-                        st.metric("En producción", en_prod_taller)
-                    
-                    with col_met3:
-                        st.metric("Entregados", entregados_taller)
-            
-            # Gráficos y tabla
-            tab1, tab2 = st.tabs(["📋 Detalle de Cortes", "📈 Estadísticas"])
-            
-            with tab1:
-                columnas_mostrar = [col for col in df_filtrado.columns if col != "ID Corte"]
-                df_mostrar = df_filtrado[columnas_mostrar].copy()
+            with st.form("form_asignar_tabla"):
+                st.markdown('<div class="editable-table">', unsafe_allow_html=True)
                 
-                # Formatear fechas
-                for col in ["Fecha Envío", "Fecha Entrega"]:
-                    if col in df_mostrar.columns:
-                        df_mostrar[col] = pd.to_datetime(df_mostrar[col]).dt.strftime("%Y-%m-%d")
+                # Mostrar títulos de columnas
+                cols = st.columns([1, 2, 1, 2, 2, 1, 1])
+                with cols[0]: st.write("**Nro Corte**")
+                with cols[1]: st.write("**Artículo**")
+                with cols[2]: st.write("**Prendas**")
+                with cols[3]: st.write("**Tela**")
+                with cols[4]: st.write("**Taller**")
+                with cols[5]: st.write("**Fecha Envío**")
+                with cols[6]: st.write("**Asignar**")
                 
-                st.dataframe(df_mostrar, use_container_width=True, height=400)
+                # Crear widgets para cada fila
+                for i, row in df_editable.iterrows():
+                    cols = st.columns([1, 2, 1, 2, 2, 1, 1])
+                    
+                    with cols[0]:
+                        st.write(f"{row['Nro Corte']}")
+                    with cols[1]:
+                        st.write(row['Artículo'])
+                    with cols[2]:
+                        st.write(row['Prendas'])
+                    with cols[3]:
+                        st.write(row['Tipo de tela'])
+                    with cols[4]:
+                        taller = st.text_input(
+                            f"Taller_{i}",
+                            value=row['Taller'],
+                            key=f"taller_{i}",
+                            placeholder="Taller",
+                            label_visibility="collapsed"
+                        )
+                        df_editable.at[i, "Taller"] = taller
+                    with cols[5]:
+                        fecha = st.date_input(
+                            f"Fecha_{i}",
+                            value=pd.to_datetime(row['Fecha Envío']).date(),
+                            key=f"fecha_{i}",
+                            label_visibility="collapsed"
+                        )
+                        df_editable.at[i, "Fecha Envío"] = fecha.strftime("%Y-%m-%d")
+                    with cols[6]:
+                        asignar = st.checkbox("✓", key=f"asignar_{i}", value=row['Asignar'])
+                        df_editable.at[i, "Asignar"] = asignar
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Botón verde para asignar
+                if st.form_submit_button("🚀 Asignar Cortes Seleccionados", type="primary"):
+                    cortes_a_asignar = df_editable[df_editable["Asignar"] == True]
+                    
+                    if not cortes_a_asignar.empty:
+                        success_count = 0
+                        for _, corte in cortes_a_asignar.iterrows():
+                            if corte["Taller"].strip():
+                                nuevo_registro = {
+                                    "ID Corte": str(corte.get("ID", "")),
+                                    "Nro Corte": str(corte.get("Nro Corte", "")),
+                                    "Artículo": str(corte.get('Artículo', '')),
+                                    "Taller": str(corte.get("Taller", "")).strip(),
+                                    "Fecha Envío": corte.get("Fecha Envío", date.today().strftime("%Y-%m-%d")),
+                                    "Fecha Entrega": "",
+                                    "Prendas Recibidas": 0,
+                                    "Prendas Falladas": 0,
+                                    "Estado": "EN PRODUCCIÓN",
+                                    "Días Transcurridos": 0
+                                }
+                                
+                                try:
+                                    ws_talleres.append_row(list(nuevo_registro.values()))
+                                    success_count += 1
+                                except Exception as e:
+                                    st.error(f"❌ Error al asignar corte {corte['Nro Corte']}: {str(e)}")
+                            else:
+                                st.warning(f"⚠️ El corte {corte['Nro Corte']} no tiene taller asignado")
+                        
+                        if success_count > 0:
+                            st.success(f"✅ {success_count} cortes asignados correctamente")
+                            time.sleep(2)
+                            st.rerun()
+                    else:
+                        st.warning("⚠️ Selecciona al menos un corte para asignar")
+        else:
+            st.success("🎉 ¡Todos los cortes han sido asignados!")
+        
+        # SECCIÓN 2: TABLERO KANBAN
+        st.subheader("📋 Tablero Kanban de Producción")
+        
+        if not df_talleres.empty:
+            # Convertir fechas y calcular días
+            df_talleres["Fecha Envío"] = pd.to_datetime(df_talleres["Fecha Envío"], errors='coerce')
+            df_talleres["Días Transcurridos"] = (date.today() - df_talleres["Fecha Envío"].dt.date).dt.days
             
-            with tab2:
-                if not df_filtrado.empty:
-                    # Gráfico de rendimiento por taller
-                    rendimiento = df_filtrado.groupby("Taller").agg({
-                        "Prendas Recibidas": "sum",
-                        "Prendas Falladas": "sum"
-                    }).reset_index()
+            # Crear columnas Kanban
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
+                st.markdown("### 🟦 En Producción")
+                en_produccion_df = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
+                
+                for _, corte in en_produccion_df.iterrows():
+                    # Determinar clase CSS por urgencia
+                    card_class = "corte-card"
+                    if corte["Días Transcurridos"] > 20:
+                        card_class += " urgente"
                     
-                    rendimiento["Eficiencia"] = ((rendimiento["Prendas Recibidas"] - rendimiento["Prendas Falladas"]) / 
-                                               rendimiento["Prendas Recibidas"].replace(0, 1)) * 100
+                    st.markdown(f'''
+                    <div class="{card_class}" onclick="alert('Corte: {corte['Nro Corte']}')">
+                        <strong>{corte['Artículo']}</strong><br>
+                        <small>Taller: {corte['Taller']}</small><br>
+                        <small>Días: {corte['Días Transcurridos']}</small><br>
+                        <small>Recibidas: {corte['Prendas Recibidas']}</small>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
+                st.markdown("### 🟨 Pendientes de Revisión")
+                pendientes_df = df_talleres[df_talleres["Estado"].str.contains("ENTREGADO", na=False)]
+                
+                for _, corte in pendientes_df.iterrows():
+                    st.markdown(f'''
+                    <div class="corte-card">
+                        <strong>{corte['Artículo']}</strong><br>
+                        <small>Taller: {corte['Taller']}</small><br>
+                        <small>Estado: {corte['Estado']}</small><br>
+                        <small>Falladas: {corte['Prendas Falladas']}</small>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
+                st.markdown("### 🟩 Completados")
+                completados_df = df_talleres[df_talleres["Estado"] == "ENTREGADO"]
+                
+                for _, corte in completados_df.iterrows():
+                    st.markdown(f'''
+                    <div class="corte-card completado">
+                        <strong>{corte['Artículo']}</strong><br>
+                        <small>Taller: {corte['Taller']}</small><br>
+                        <small>Entregado: {corte['Fecha Entrega']}</small><br>
+                        <small>✅ 100% completado</small>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        # SECCIÓN 3: DETALLE Y ACTUALIZACIÓN
+        st.subheader("🔄 Detalle y Actualización de Cortes")
+        
+        if not df_talleres.empty:
+            # Selector de corte para detalle
+            cortes_disponibles = df_talleres["Nro Corte"].unique().tolist()
+            corte_seleccionado = st.selectbox("Seleccionar corte para detalle", cortes_disponibles)
+            
+            if corte_seleccionado:
+                corte_info = df_talleres[df_talleres["Nro Corte"] == corte_seleccionado].iloc[0]
+                
+                # Obtener información del corte original
+                try:
+                    corte_original = df_cortes[df_cortes["ID"].astype(str) == str(corte_info.get("ID Corte"))].iloc[0]
+                    total_prendas = int(corte_original.get('Prendas', 0))
+                except:
+                    total_prendas = 0
+                
+                col_info1, col_info2 = st.columns(2)
+                
+                with col_info1:
+                    st.info(f"**Artículo:** {corte_info.get('Artículo', '')}")
+                    st.info(f"**Taller:** {corte_info.get('Taller', '')}")
+                    st.info(f"**Enviado:** {corte_info.get('Fecha Envío', '')}")
+                
+                with col_info2:
+                    st.info(f"**Prendas totales:** {total_prendas}")
+                    st.info(f"**Recibidas:** {corte_info.get('Prendas Recibidas', 0)}")
+                    st.info(f"**Estado:** {corte_info.get('Estado', '')}")
+                
+                # Formulario de actualización
+                with st.form(f"form_update_detalle"):
+                    col_up1, col_up2 = st.columns(2)
                     
-                    st.bar_chart(rendimiento.set_index("Taller")["Eficiencia"])
+                    with col_up1:
+                        nuevas_recibidas = st.number_input(
+                            "Prendas recibidas",
+                            min_value=0,
+                            max_value=total_prendas,
+                            value=int(corte_info.get('Prendas Recibidas', 0))
+                        )
+                        
+                        nuevas_falladas = st.number_input(
+                            "Prendas falladas",
+                            min_value=0,
+                            value=int(corte_info.get('Prendas Falladas', 0)),
+                            help="Cantidad de prendas que vinieron con fallas"
+                        )
                     
-                    # Estadísticas adicionales
-                    col_stat1, col_stat2 = st.columns(2)
+                    with col_up2:
+                        # Determinar estado automáticamente
+                        faltante_nuevo = total_prendas - nuevas_recibidas
+                        
+                        if nuevas_recibidas == 0:
+                            estado_auto = "EN PRODUCCIÓN"
+                        elif faltante_nuevo > 0 and nuevas_falladas == 0:
+                            estado_auto = "ENTREGADO c/FALTANTES"
+                        elif nuevas_falladas > 0 and faltante_nuevo == 0:
+                            estado_auto = "ENTREGADO c/FALLAS"
+                        elif nuevas_falladas > 0 and faltante_nuevo > 0:
+                            estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
+                        else:
+                            estado_auto = "ENTREGADO"
+                        
+                        st.write(f"**Estado automático:** {estado_auto}")
+                        
+                        fecha_entrega = st.date_input(
+                            "Fecha de entrega",
+                            value=date.today()
+                        )
                     
-                    with col_stat1:
-                        st.write("**📈 Rendimiento por taller:**")
-                        for _, row in rendimiento.iterrows():
-                            st.write(f"- {row['Taller']}: {row['Eficiencia']:.1f}% eficiencia")
-                    
-                    with col_stat2:
-                        st.write("**⏱️ Tiempos promedio:**")
-                        # Aquí podrías agregar cálculos de tiempos promedio por taller
+                    if st.form_submit_button("💾 Actualizar Producción"):
+                        if nuevas_falladas > nuevas_recibidas:
+                            st.error("❌ Las prendas falladas no pueden ser más que las recibidas")
+                        else:
+                            try:
+                                # Encontrar y actualizar la fila
+                                all_data = ws_talleres.get_all_values()
+                                row_index = None
+                                
+                                for i, row in enumerate(all_data[1:], start=2):
+                                    if str(row[0]) == str(corte_info.get("ID Corte")):
+                                        row_index = i
+                                        break
+                                
+                                if row_index:
+                                    ws_talleres.update_cell(row_index, 7, nuevas_recibidas)
+                                    ws_talleres.update_cell(row_index, 8, nuevas_falladas)
+                                    ws_talleres.update_cell(row_index, 9, estado_auto)
+                                    ws_talleres.update_cell(row_index, 6, fecha_entrega.strftime("%Y-%m-%d"))
+                                    
+                                    st.success("✅ Producción actualizada correctamente")
+                                    time.sleep(2)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ No se encontró el registro")
+                            
+                            except Exception as e:
+                                st.error(f"❌ Error al actualizar: {str(e)}")
 
     else:
         st.info("📭 No hay cortes registrados para gestionar talleres")
