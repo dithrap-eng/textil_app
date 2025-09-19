@@ -661,21 +661,17 @@ elif menu == "🏭 Talleres":
         else:
             st.success("🎉 ¡Todos los cortes han sido asignados!")
         
-      # SECCIÓN 2: TABLERO KANBAN (VERSIÓN CORREGIDA)
+    # SECCIÓN 2: TABLERO KANBAN MEJORADO
         st.subheader("📋 Tablero Kanban de Producción")
         
         if not df_talleres.empty:
-            # CORRECCIÓN: Manejo robusto de fechas
+            # Convertir fechas de manera segura
             try:
-                # Convertir fechas de manera segura
                 df_talleres["Fecha Envío"] = pd.to_datetime(df_talleres["Fecha Envío"], errors='coerce')
-                
-                # Calcular días transcurridos con manejo de valores nulos
                 df_talleres["Días Transcurridos"] = df_talleres["Fecha Envío"].apply(
                     lambda x: (date.today() - x.date()).days if pd.notnull(x) else 0
                 )
             except Exception as e:
-                st.error(f"Error al procesar fechas: {str(e)}")
                 df_talleres["Días Transcurridos"] = 0
             
             # Crear columnas Kanban
@@ -693,19 +689,32 @@ elif menu == "🏭 Talleres":
                     if dias > 20:
                         card_class += " urgente"
                     
-                    # Asegurar que los valores existan
+                    # Obtener información completa
                     articulo = corte.get('Artículo', 'Sin nombre')
                     taller = corte.get('Taller', 'Sin taller')
-                    nro_corte = corte.get('Nro Corte', '')
+                    nro_corte = corte.get('Número de Corte', '')
                     prendas_recibidas = corte.get('Prendas Recibidas', 0)
+                    total_prendas = 0
+                    
+                    # Obtener total de prendas del corte original
+                    try:
+                        id_corte = corte.get('ID Corte', '')
+                        corte_original = df_cortes[df_cortes["ID"].astype(str) == str(id_corte)].iloc[0]
+                        total_prendas = int(corte_original.get('Prendas', 0))
+                    except:
+                        pass
+                    
+                    # Barra de progreso de días
+                    progreso_dias = min(dias / 20, 1.0)
                     
                     st.markdown(f'''
                     <div class="{card_class}">
-                        <strong>{articulo}</strong><br>
-                        <small>Taller: {taller}</small><br>
-                        <small>Días: {dias}</small><br>
-                        <small>Recibidas: {prendas_recibidas}</small>
-                        <small>Corte: {nro_corte}</small>
+                        <strong>{articulo}</strong>
+                        <small>Corte: {nro_corte} | Taller: {taller}</small>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {progreso_dias*100}%"></div>
+                        </div>
+                        <small>Días: {dias}/20 | Recibidas: {prendas_recibidas}/{total_prendas}</small>
                     </div>
                     ''', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -713,7 +722,7 @@ elif menu == "🏭 Talleres":
             with col2:
                 st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
                 st.markdown("### 🟨 Pendientes de Revisión")
-                # CORRECCIÓN: Mejor filtro para estados de entregado
+                # Filtrar entregas con faltantes o fallas
                 pendientes_df = df_talleres[
                     df_talleres["Estado"].str.contains("ENTREGADO", na=False) & 
                     (df_talleres["Estado"] != "ENTREGADO")
@@ -722,15 +731,39 @@ elif menu == "🏭 Talleres":
                 for idx, corte in pendientes_df.iterrows():
                     articulo = corte.get('Artículo', 'Sin nombre')
                     taller = corte.get('Taller', 'Sin taller')
+                    nro_corte = corte.get('Número de Corte', '')
                     estado = corte.get('Estado', '')
+                    prendas_recibidas = corte.get('Prendas Recibidas', 0)
                     prendas_falladas = corte.get('Prendas Falladas', 0)
+                    total_prendas = 0
+                    
+                    # Obtener total de prendas
+                    try:
+                        id_corte = corte.get('ID Corte', '')
+                        corte_original = df_cortes[df_cortes["ID"].astype(str) == str(id_corte)].iloc[0]
+                        total_prendas = int(corte_original.get('Prendas', 0))
+                    except:
+                        pass
+                    
+                    faltante = total_prendas - prendas_recibidas
+                    
+                    # Determinar tipo de pendiente
+                    if "FALTANTES" in estado:
+                        icono = "⚠️"
+                        detalle = f"Faltan: {faltante} prendas"
+                    elif "FALLAS" in estado:
+                        icono = "❌"
+                        detalle = f"Falladas: {prendas_falladas}"
+                    else:
+                        icono = "📦"
+                        detalle = f"Recibidas: {prendas_recibidas}/{total_prendas}"
                     
                     st.markdown(f'''
                     <div class="corte-card">
-                        <strong>{articulo}</strong><br>
-                        <small>Taller: {taller}</small><br>
-                        <small>Estado: {estado}</small><br>
-                        <small>Falladas: {prendas_falladas}</small>
+                        <strong>{articulo}</strong>
+                        <small>Corte: {nro_corte} | Taller: {taller}</small>
+                        <small>{icono} {estado}</small>
+                        <small>{detalle}</small>
                     </div>
                     ''', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -743,155 +776,185 @@ elif menu == "🏭 Talleres":
                 for idx, corte in completados_df.iterrows():
                     articulo = corte.get('Artículo', 'Sin nombre')
                     taller = corte.get('Taller', 'Sin taller')
+                    nro_corte = corte.get('Número de Corte', '')
                     fecha_entrega = corte.get('Fecha Entrega', '')
+                    prendas_recibidas = corte.get('Prendas Recibidas', 0)
+                    total_prendas = 0
+                    
+                    # Obtener total de prendas
+                    try:
+                        id_corte = corte.get('ID Corte', '')
+                        corte_original = df_cortes[df_cortes["ID"].astype(str) == str(id_corte)].iloc[0]
+                        total_prendas = int(corte_original.get('Prendas', 0))
+                    except:
+                        pass
                     
                     st.markdown(f'''
                     <div class="corte-card completado">
-                        <strong>{articulo}</strong><br>
-                        <small>Taller: {taller}</small><br>
-                        <small>Entregado: {fecha_entrega}</small><br>
-                        <small>✅ 100% completado</small>
+                        <strong>{articulo}</strong>
+                        <small>Corte: {nro_corte} | Taller: {taller}</small>
+                        <small>✅ 100% completado ({prendas_recibidas}/{total_prendas})</small>
+                        <small>Entregado: {fecha_entrega}</small>
                     </div>
                     ''', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         
-        # SECCIÓN 3: DETALLE Y ACTUALIZACIÓN (CON ÍNDICES CORRECTOS)
-        st.subheader("🔄 Detalle y Actualización de Cortes")
+        # SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES
+        st.subheader("📦 Sistema de Entregas Parciales")
         
         if not df_talleres.empty:
-            # Usar los nombres exactos de las columnas
             columna_nro_corte = "Número de Corte"
             
             if columna_nro_corte in df_talleres.columns:
-                # Selector de corte para detalle
                 cortes_disponibles = df_talleres[columna_nro_corte].dropna().unique().tolist()
                 
                 if cortes_disponibles:
-                    corte_seleccionado = st.selectbox("Seleccionar corte para detalle", cortes_disponibles)
+                    corte_seleccionado = st.selectbox("Seleccionar corte para gestión de entregas", cortes_disponibles)
                     
                     if corte_seleccionado:
                         corte_info = df_talleres[df_talleres[columna_nro_corte] == corte_seleccionado].iloc[0]
                         
                         # Obtener información del corte original
                         try:
-                            columna_id = "ID Corte"
-                            if columna_id in df_talleres.columns:
-                                id_corte = str(corte_info.get(columna_id, ""))
-                                corte_original = df_cortes[df_cortes["ID"].astype(str) == id_corte].iloc[0]
-                                total_prendas = int(corte_original.get('Prendas', 0))
-                            else:
-                                total_prendas = int(corte_info.get('Prendas Recibidas', 0))  # Valor por defecto
+                            id_corte = str(corte_info.get('ID Corte', ''))
+                            corte_original = df_cortes[df_cortes["ID"].astype(str) == id_corte].iloc[0]
+                            total_prendas = int(corte_original.get('Prendas', 0))
                         except:
                             total_prendas = 0
                         
-                        # Formatear fecha de envío
-                        fecha_envio = corte_info.get('Fecha Envío', '')
-                        fecha_envio_str = str(fecha_envio)
-                        
+                        # Mostrar información actual
                         col_info1, col_info2 = st.columns(2)
                         
                         with col_info1:
                             st.info(f"**Artículo:** {corte_info.get('Artículo', '')}")
                             st.info(f"**Taller:** {corte_info.get('Taller', '')}")
-                            st.info(f"**Enviado:** {fecha_envio_str}")
+                            st.info(f"**Total prendas:** {total_prendas}")
                         
                         with col_info2:
-                            st.info(f"**Prendas totales:** {total_prendas}")
-                            st.info(f"**Recibidas:** {corte_info.get('Prendas Recibidas', 0)}")
-                            st.info(f"**Estado:** {corte_info.get('Estado', '')}")
+                            st.info(f"**Recibidas actual:** {corte_info.get('Prendas Recibidas', 0)}")
+                            st.info(f"**Falladas actual:** {corte_info.get('Prendas Falladas', 0)}")
+                            st.info(f"**Estado actual:** {corte_info.get('Estado', '')}")
                         
-                        # Formulario de actualización
-                        with st.form(f"form_update_detalle_{corte_seleccionado}"):
-                            col_up1, col_up2 = st.columns(2)
+                        # Sistema de entregas parciales
+                        st.markdown("---")
+                        st.subheader("📤 Registrar Nueva Entrega")
+                        
+                        with st.form(f"form_entrega_parcial_{corte_seleccionado}"):
+                            col_ent1, col_ent2, col_ent3 = st.columns(3)
                             
-                            with col_up1:
+                            with col_ent1:
+                                # Determinar número de entrega
+                                recibidas_actual = int(corte_info.get('Prendas Recibidas', 0))
+                                if recibidas_actual == 0:
+                                    numero_entrega = "1ra Entrega"
+                                elif recibidas_actual < total_prendas:
+                                    numero_entrega = "2da Entrega"
+                                else:
+                                    numero_entrega = "Entrega Final"
+                                
+                                st.write(f"**{numero_entrega}**")
+                                
                                 nuevas_recibidas = st.number_input(
-                                    "Prendas recibidas",
+                                    "Prendas recibidas en esta entrega",
                                     min_value=0,
-                                    max_value=total_prendas,
-                                    value=int(corte_info.get('Prendas Recibidas', 0)),
-                                    key=f"rec_{corte_seleccionado}"
-                                )
-                                
-                                nuevas_falladas = st.number_input(
-                                    "Prendas falladas",
-                                    min_value=0,
-                                    value=int(corte_info.get('Prendas Falladas', 0)),
-                                    help="Cantidad de prendas que vinieron con fallas",
-                                    key=f"fall_{corte_seleccionado}"
+                                    max_value=total_prendas - recibidas_actual,
+                                    value=0,
+                                    key=f"nuevas_rec_{corte_seleccionado}"
                                 )
                             
-                            with col_up2:
-                                # Determinar estado automáticamente
-                                faltante_nuevo = total_prendas - nuevas_recibidas
+                            with col_ent2:
+                                nuevas_falladas = st.number_input(
+                                    "Prendas falladas en esta entrega",
+                                    min_value=0,
+                                    max_value=nuevas_recibidas,
+                                    value=0,
+                                    help="Fallas específicas de esta entrega",
+                                    key=f"nuevas_fall_{corte_seleccionado}"
+                                )
                                 
-                                if nuevas_recibidas == 0:
+                                fecha_entrega_parcial = st.date_input(
+                                    "Fecha de esta entrega",
+                                    value=date.today(),
+                                    key=f"fecha_ent_parcial_{corte_seleccionado}"
+                                )
+                            
+                            with col_ent3:
+                                # Calcular nuevos totales
+                                total_recibidas_nuevo = recibidas_actual + nuevas_recibidas
+                                total_falladas_nuevo = int(corte_info.get('Prendas Falladas', 0)) + nuevas_falladas
+                                faltante_nuevo = total_prendas - total_recibidas_nuevo
+                                
+                                # Determinar estado automático
+                                if total_recibidas_nuevo == 0:
                                     estado_auto = "EN PRODUCCIÓN"
-                                elif faltante_nuevo > 0 and nuevas_falladas == 0:
+                                elif faltante_nuevo > 0 and total_falladas_nuevo == 0:
                                     estado_auto = "ENTREGADO c/FALTANTES"
-                                elif nuevas_falladas > 0 and faltante_nuevo == 0:
+                                elif total_falladas_nuevo > 0 and faltante_nuevo == 0:
                                     estado_auto = "ENTREGADO c/FALLAS"
-                                elif nuevas_falladas > 0 and faltante_nuevo > 0:
+                                elif total_falladas_nuevo > 0 and faltante_nuevo > 0:
                                     estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
                                 else:
                                     estado_auto = "ENTREGADO"
                                 
-                                st.write(f"**Estado automático:** {estado_auto}")
-                                
-                                # Usar fecha existente o hoy por defecto
-                                fecha_entrega_existente = corte_info.get('Fecha Entrega', '')
-                                fecha_default = date.today()
-                                if fecha_entrega_existente and str(fecha_entrega_existente) != '0':
-                                    try:
-                                        fecha_default = pd.to_datetime(fecha_entrega_existente).date()
-                                    except:
-                                        pass
-                                
-                                fecha_entrega = st.date_input(
-                                    "Fecha de entrega",
-                                    value=fecha_default,
-                                    key=f"fecha_ent_{corte_seleccionado}"
-                                )
+                                st.write(f"**Nuevo total recibidas:** {total_recibidas_nuevo}")
+                                st.write(f"**Nuevo total falladas:** {total_falladas_nuevo}")
+                                st.write(f"**Nuevo estado:** {estado_auto}")
                             
-                            if st.form_submit_button("💾 Actualizar Producción"):
-                                if nuevas_falladas > nuevas_recibidas:
-                                    st.error("❌ Las prendas falladas no pueden ser más que las recibidas")
-                                else:
+                            if st.form_submit_button("📦 Registrar Entrega Parcial"):
+                                if nuevas_recibidas > 0:
                                     try:
-                                        # Encontrar y actualizar la fila
+                                        # Encontrar la fila
                                         all_data = ws_talleres.get_all_values()
                                         row_index = None
                                         
-                                        # Buscar la fila por número de corte (columna B)
                                         for i, row in enumerate(all_data[1:], start=2):
-                                            if len(row) > 1 and str(row[1]) == str(corte_seleccionado):  # Columna B (índice 1)
+                                            if len(row) > 1 and str(row[1]) == str(corte_seleccionado):
                                                 row_index = i
                                                 break
                                         
                                         if row_index:
-                                            # CORRECCIÓN: ÍNDICES EXACTOS BASADOS EN TU GOOGLE SHEETS
-                                            # A: ID Corte (1) - B: Número de Corte (2) - C: Artículo (3) - D: Taller (4)
-                                            # E: Fecha Envío (5) - F: Fecha Entrega (6) - G: Prendas Recibidas (7)
-                                            # H: Prendas Falladas (8) - I: Estado (9) - J: Días Transcurridos (10)
+                                            # Actualizar con nuevos totales
+                                            ws_talleres.update_cell(row_index, 7, total_recibidas_nuevo)  # Prendas Recibidas
+                                            ws_talleres.update_cell(row_index, 8, total_falladas_nuevo)   # Prendas Falladas
+                                            ws_talleres.update_cell(row_index, 9, estado_auto)            # Estado
+                                            ws_talleres.update_cell(row_index, 6, fecha_entrega_parcial.strftime("%Y-%m-%d"))  # Fecha Entrega
                                             
-                                            ws_talleres.update_cell(row_index, 7, nuevas_recibidas)   # Columna G - Prendas Recibidas
-                                            ws_talleres.update_cell(row_index, 8, nuevas_falladas)    # Columna H - Prendas Falladas
-                                            ws_talleres.update_cell(row_index, 9, estado_auto)        # Columna I - Estado
-                                            ws_talleres.update_cell(row_index, 6, fecha_entrega.strftime("%Y-%m-%d"))  # Columna F - Fecha Entrega
+                                            # Guardar historial en una nueva hoja
+                                            try:
+                                                ws_historial = spreadsheet.worksheet("Historial_Entregas")
+                                            except:
+                                                spreadsheet.add_worksheet(title="Historial_Entregas", rows=100, cols=10)
+                                                ws_historial = spreadsheet.worksheet("Historial_Entregas")
+                                                ws_historial.append_row(["ID Corte", "Número de Corte", "Artículo", "Taller", 
+                                                                       "Fecha Entrega", "Entrega N°", "Prendas Recibidas", 
+                                                                       "Prendas Falladas", "Total Acumulado", "Estado"])
                                             
-                                            st.success("✅ Producción actualizada correctamente")
+                                            # Registrar en historial
+                                            registro_historial = [
+                                                corte_info.get('ID Corte', ''),
+                                                corte_seleccionado,
+                                                corte_info.get('Artículo', ''),
+                                                corte_info.get('Taller', ''),
+                                                fecha_entrega_parcial.strftime("%Y-%m-%d"),
+                                                numero_entrega,
+                                                nuevas_recibidas,
+                                                nuevas_falladas,
+                                                total_recibidas_nuevo,
+                                                estado_auto
+                                            ]
+                                            ws_historial.append_row(registro_historial)
+                                            
+                                            st.success(f"✅ {numero_entrega} registrada correctamente")
                                             time.sleep(2)
                                             st.rerun()
                                         else:
-                                            st.error("❌ No se encontró el registro en la planilla")
+                                            st.error("❌ No se encontró el registro")
                                     
                                     except Exception as e:
-                                        st.error(f"❌ Error al actualizar: {str(e)}")
-                else:
-                    st.info("No hay cortes disponibles para mostrar")
-            else:
-                st.error("No se encontró la columna 'Número de Corte'")
-                st.write("Columnas disponibles:", df_talleres.columns.tolist())
+                                        st.error(f"❌ Error al registrar entrega: {str(e)}")
+                                else:
+                                    st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+
 
 
 
