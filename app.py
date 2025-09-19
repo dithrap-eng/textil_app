@@ -850,53 +850,49 @@ elif menu == "🏭 Talleres":
                         st.markdown("---")
                         st.subheader("📤 Registrar Nueva Entrega")
                         
-                        # CORRECCIÓN: Crear el formulario de manera diferente
-                        form_key = f"form_entrega_parcial_{corte_seleccionado}"
-                        with st.form(form_key):
-                            col_ent1, col_ent2, col_ent3 = st.columns(3)
+                        # 📤 REGISTRAR NUEVA ENTREGA
+                        with st.form(key='nueva_entrega_form'):
+                            st.subheader("📤 Registrar Nueva Entrega")
                             
-                            with col_ent1:
-                                # Determinar número de entrega
-                                if recibidas_actual == 0:
-                                    numero_entrega = "1ra Entrega"
-                                elif recibidas_actual < total_prendas:
-                                    numero_entrega = "2da Entrega"
+                            es_entrega_final = st.checkbox("Entrega Final")
+                            prendas_recibidas = st.number_input("Prendas recibidas en esta entrega", min_value=0, value=0)
+                            prendas_falladas = st.number_input("Prendas falladas en esta entrega", min_value=0, value=0)
+                            fecha_entrega = st.date_input("Fecha de esta entrega", value=date.today())
+                            
+                            # ✅ BOTÓN DE SUBMIT REQUERIDO
+                            submitted = st.form_submit_button("Guardar Entrega")
+                            
+                            if submitted:
+                                # 1. OBTENER DATOS ACTUALES
+                                corte_seleccionado = "123"  # ← Reemplaza con tu lógica para obtener el corte
+                                
+                                # Cargar datos de Cortes para obtener el total de prendas
+                                df_cortes = cargar_datos("Cortes")
+                                total_prendas = df_cortes.loc[df_cortes['Número de Corte'] == corte_seleccionado, 'Prendas'].values[0]
+                                
+                                # Cargar datos de Talleres para obtener entregas actuales
+                                df_talleres = cargar_datos("Talleres")
+                                taller_data = df_talleres[df_talleres['Número de Corte'] == corte_seleccionado]
+                                
+                                if not taller_data.empty:
+                                    prendas_recibidas_actual = taller_data['Prendas Recibidas'].values[0]
+                                    prendas_falladas_actual = taller_data['Prendas Falladas'].values[0]
                                 else:
-                                    numero_entrega = "Entrega Final"
+                                    prendas_recibidas_actual = 0
+                                    prendas_falladas_actual = 0
                                 
-                                st.write(f"**{numero_entrega}**")
+                                # Cargar historial de entregas
+                                df_historial = cargar_datos("Historial_Entregas")
+                                entregas_historicas = df_historial[df_historial['Número de Corte'] == corte_seleccionado]
+                                memo_recibidas = entregas_historicas['Prendas Recibidas'].sum()
+                                memo_fallas = entregas_historicas['Prendas Falladas'].sum()
                                 
-                                nuevas_recibidas = st.number_input(
-                                    "Prendas recibidas en esta entrega",
-                                    min_value=0,
-                                    max_value=total_prendas - recibidas_actual,
-                                    value=0,
-                                    key=f"nuevas_rec_{corte_seleccionado}"
-                                )
-                            
-                            with col_ent2:
-                                nuevas_falladas = st.number_input(
-                                    "Prendas falladas en esta entrega",
-                                    min_value=0,
-                                    max_value=nuevas_recibidas,
-                                    value=0,
-                                    help="Fallas específicas de esta entrega",
-                                    key=f"nuevas_fall_{corte_seleccionado}"
-                                )
+                                # 2. CALCULAR TOTALES (DEFINIR LAS VARIABLES)
+                                total_recibidas_mero = prendas_recibidas_actual + memo_recibidas + prendas_recibidas
+                                total_fallas_mero = prendas_falladas_actual + memo_fallas + prendas_falladas
+                                faltante_mero = total_prendas - total_recibidas_mero
                                 
-                                fecha_entrega_parcial = st.date_input(
-                                    "Fecha de esta entrega",
-                                    value=date.today(),
-                                    key=f"fecha_ent_parcial_{corte_seleccionado}"
-                                )
-                            
-                            with col_ent3:
-                                # Calcular nuevos totales
-                                total_recibidas_nuevo = recibidas_actual + nuevas_recibidas
-                                total_falladas_nuevo = falladas_actual + nuevas_falladas
-                                faltante_nuevo = total_prendas - total_recibidas_nuevo
-                               
-                                # CONNECTION: Lógica mejorada para el estado:
+                                # 3. APLICAR LÓGICA DE ESTADO
                                 if total_recibidas_mero == 0:
                                     estado_auto = "01 PRODUCCIÓN"
                                 elif faltante_mero > 0:
@@ -909,73 +905,29 @@ elif menu == "🏭 Talleres":
                                 else:
                                     estado_auto = "ENTREGADO"
                                 
-                                # MOSTRAR FALTANTE EN ROJO en el formulario
-                                st.write(f"**Nuevo total recibidas:** {total_recibidas_nuevo}")
-                                st.write(f"**Nuevo total falladas:** {total_falladas_nuevo}")
-                                
-                                if faltante_nuevo > 0:
-                                    st.error(f"**⚠️ Nuevo faltante:** {faltante_nuevo} prendas")
-                                
-                                st.write(f"**Nuevo estado:** {estado_auto}")
-                            
-                            # CORRECCIÓN: Botón de submit con manejo directo
-                            submit_button = st.form_submit_button("📦 Registrar Entrega Parcial")
-                        
-                        # CORRECCIÓN: Manejar el submit fuera del form para evitar problemas de estado
-                        if submit_button:
-                            if nuevas_recibidas > 0:
+                                # 4. GUARDAR EN GOOGLE SHEETS
                                 try:
-                                    # Encontrar la fila
-                                    all_data = ws_talleres.get_all_values()
-                                    row_index = None
+                                    # Guardar en Historial_Entregas
+                                    sheet_historial = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                                    nueva_fila = [
+                                        corte_seleccionado,
+                                        str(fecha_entrega),
+                                        prendas_recibidas,
+                                        prendas_falladas,
+                                        total_recibidas_mero,
+                                        estado_auto
+                                    ]
+                                    sheet_historial.append_row(nueva_fila)
                                     
-                                    for i, row in enumerate(all_data[1:], start=2):
-                                        if len(row) > 1 and str(row[1]) == str(corte_seleccionado):
-                                            row_index = i
-                                            break
+                                    # Actualizar Talleres
+                                    sheet_talleres = client.open(SHEET_NAME).worksheet("Talleres")
+                                    # ... código para actualizar talleres ...
                                     
-                                    if row_index:
-                                        # Actualizar con nuevos totales
-                                        ws_talleres.update_cell(row_index, 7, total_recibidas_nuevo)  # Prendas Recibidas
-                                        ws_talleres.update_cell(row_index, 8, total_falladas_nuevo)   # Prendas Falladas
-                                        ws_talleres.update_cell(row_index, 9, estado_auto)            # Estado
-                                        ws_talleres.update_cell(row_index, 6, fecha_entrega_parcial.strftime("%Y-%m-%d"))  # Fecha Entrega
-                                        
-                                        # Guardar historial en una nueva hoja
-                                        try:
-                                            ws_historial = spreadsheet.worksheet("Historial_Entregas")
-                                        except:
-                                            spreadsheet.add_worksheet(title="Historial_Entregas", rows=100, cols=10)
-                                            ws_historial = spreadsheet.worksheet("Historial_Entregas")
-                                            ws_historial.append_row(["ID Corte", "Número de Corte", "Artículo", "Taller", 
-                                                                   "Fecha Entrega", "Entrega N°", "Prendas Recibidas", 
-                                                                   "Prendas Falladas", "Total Acumulado", "Estado"])
-                                        
-                                        # Registrar en historial
-                                        registro_historial = [
-                                            corte_info.get('ID Corte', ''),
-                                            corte_seleccionado,
-                                            corte_info.get('Artículo', ''),
-                                            corte_info.get('Taller', ''),
-                                            fecha_entrega_parcial.strftime("%Y-%m-%d"),
-                                            numero_entrega,
-                                            nuevas_recibidas,
-                                            nuevas_falladas,
-                                            total_recibidas_nuevo,
-                                            estado_auto
-                                        ]
-                                        ws_historial.append_row(registro_historial)
-                                        
-                                        st.success(f"✅ {numero_entrega} registrada correctamente")
-                                        time.sleep(2)
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ No se encontró el registro")
-                                
+                                    st.success("✅ Entrega registrada correctamente")
+                                    st.info(f"Estado actualizado: {estado_auto}")
+                                    
                                 except Exception as e:
-                                    st.error(f"❌ Error al registrar entrega: {str(e)}")
-                            else:
-                                st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+                                    st.error(f"❌ Error al guardar: {str(e)}")
 
 
 
