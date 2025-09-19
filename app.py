@@ -439,7 +439,7 @@ elif menu == "🏭 Proveedores":
 
 
 # -------------------------------
-# TALLERES (VERSIÓN MEJORADA)
+# TALLERES (VERSIÓN CORREGIDA)
 # -------------------------------
 elif menu == "🏭 Talleres":
     # Configuración de estilo
@@ -471,6 +471,15 @@ elif menu == "🏭 Talleres":
             padding: 15px;
             border-radius: 10px;
             border: 1px solid #e9ecef;
+        }
+        .green-button {
+            background-color: #4CAF50 !important;
+            color: white !important;
+            border: none !important;
+        }
+        .narrow-column {
+            width: 100px !important;
+            max-width: 100px !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -524,7 +533,7 @@ elif menu == "🏭 Talleres":
         with col4:
             st.markdown(f'<div class="metric-card alert"><h4>⚠️ {alertas}</h4><p>Con alertas</p></div>', unsafe_allow_html=True)
         
-        # SECCIÓN 1: ASIGNAR CORTES (TABLA EDITABLE)
+        # SECCIÓN 1: ASIGNAR CORTES (TABLA EDITABLE MEJORADA)
         st.subheader("📤 Asignar corte a taller")
         
         if not cortes_sin_asignar.empty:
@@ -539,67 +548,92 @@ elif menu == "🏭 Talleres":
             with st.form("form_asignar_tabla"):
                 st.markdown('<div class="editable-table">', unsafe_allow_html=True)
                 
-                # Mostrar tabla editable
-                columnas_mostrar = ["Nro Corte", "Artículo", "Prendas", "Tipo de tela", "Taller", "Fecha Envío", "Asignar"]
-                columnas_mostrar = [col for col in columnas_mostrar if col in df_editable.columns]
+                # Mostrar títulos de columnas
+                cols = st.columns([1, 2, 1, 2, 2, 1, 1])
+                with cols[0]: st.write("**Nro Corte**")
+                with cols[1]: st.write("**Artículo**")
+                with cols[2]: st.write("**Prendas**")
+                with cols[3]: st.write("**Tela**")
+                with cols[4]: st.write("**Taller**")
+                with cols[5]: st.write("**Fecha Envío**")
+                with cols[6]: st.write("**Asignar**")
                 
                 # Crear widgets para cada fila
                 for i, row in df_editable.iterrows():
-                    col1, col2, col3, col4, col5, col6 = st.columns([1, 2, 1, 2, 2, 1])
+                    cols = st.columns([1, 2, 1, 2, 2, 1, 1])
                     
-                    with col1:
-                        st.write(f"**{row['Nro Corte']}**")
-                    with col2:
+                    with cols[0]:
+                        st.write(f"{row['Nro Corte']}")
+                    with cols[1]:
                         st.write(row['Artículo'])
-                    with col3:
+                    with cols[2]:
                         st.write(row['Prendas'])
-                    with col4:
+                    with cols[3]:
                         st.write(row['Tipo de tela'])
-                    with col5:
-                        taller = st.text_input(f"Taller {i}", value=row['Taller'], key=f"taller_{i}", placeholder="Nombre del taller")
+                    with cols[4]:
+                        taller = st.text_input(
+                            f"Taller_{i}",
+                            value=row['Taller'],
+                            key=f"taller_{i}",
+                            placeholder="Taller",
+                            label_visibility="collapsed"
+                        )
                         df_editable.at[i, "Taller"] = taller
-                    with col6:
-                        fecha = st.date_input(f"Fecha {i}", 
-                                            value=pd.to_datetime(row['Fecha Envío']).date(), 
-                                            key=f"fecha_{i}")
+                    with cols[5]:
+                        fecha = st.date_input(
+                            f"Fecha_{i}",
+                            value=pd.to_datetime(row['Fecha Envío']).date(),
+                            key=f"fecha_{i}",
+                            label_visibility="collapsed"
+                        )
                         df_editable.at[i, "Fecha Envío"] = fecha.strftime("%Y-%m-%d")
-                        asignar = st.checkbox("Asignar", key=f"asignar_{i}")
+                    with cols[6]:
+                        asignar = st.checkbox("✓", key=f"asignar_{i}", value=row['Asignar'])
                         df_editable.at[i, "Asignar"] = asignar
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                if st.form_submit_button("🚀 Asignar Cortes Seleccionados"):
+                # Botón verde para asignar
+                if st.form_submit_button("🚀 Asignar Cortes Seleccionados", type="primary"):
                     cortes_a_asignar = df_editable[df_editable["Asignar"] == True]
                     
                     if not cortes_a_asignar.empty:
+                        success_count = 0
                         for _, corte in cortes_a_asignar.iterrows():
-                            nuevo_registro = {
-                                "ID Corte": str(corte.get("ID", "")),
-                                "Nro Corte": str(corte.get("Nro Corte", "")),
-                                "Artículo": str(corte.get('Artículo', '')),
-                                "Taller": str(corte.get("Taller", "")),
-                                "Fecha Envío": corte.get("Fecha Envío", date.today().strftime("%Y-%m-%d")),
-                                "Fecha Entrega": "",
-                                "Prendas Recibidas": 0,
-                                "Prendas Falladas": 0,
-                                "Estado": "EN PRODUCCIÓN",
-                                "Días Transcurridos": 0
-                            }
-                            
-                            try:
-                                ws_talleres.append_row(list(nuevo_registro.values()))
-                                st.success(f"✅ Corte {corte['Nro Corte']} asignado a {corte['Taller']}")
-                            except Exception as e:
-                                st.error(f"❌ Error al asignar corte {corte['Nro Corte']}: {str(e)}")
+                            if corte["Taller"].strip():  # Verificar que se ingresó un taller
+                                nuevo_registro = {
+                                    "ID Corte": str(corte.get("ID", "")),
+                                    "Nro Corte": str(corte.get("Nro Corte", "")),
+                                    "Artículo": str(corte.get('Artículo', '')),
+                                    "Taller": str(corte.get("Taller", "")).strip(),
+                                    "Fecha Envío": corte.get("Fecha Envío", date.today().strftime("%Y-%m-%d")),
+                                    "Fecha Entrega": "",
+                                    "Prendas Recibidas": 0,
+                                    "Prendas Falladas": 0,
+                                    "Estado": "EN PRODUCCIÓN",
+                                    "Días Transcurridos": 0
+                                }
+                                
+                                try:
+                                    ws_talleres.append_row(list(nuevo_registro.values()))
+                                    success_count += 1
+                                except Exception as e:
+                                    st.error(f"❌ Error al asignar corte {corte['Nro Corte']}: {str(e)}")
+                            else:
+                                st.warning(f"⚠️ El corte {corte['Nro Corte']} no tiene taller asignado")
                         
-                        time.sleep(2)
-                        st.rerun()
+                        if success_count > 0:
+                            st.success(f"✅ {success_count} cortes asignados correctamente")
+                            # Esperar y recargar
+                            import time
+                            time.sleep(2)
+                            st.rerun()
                     else:
                         st.warning("⚠️ Selecciona al menos un corte para asignar")
         else:
             st.success("🎉 ¡Todos los cortes han sido asignados!")
         
-        # SECCIÓN 2: ESTADO DE PRODUCCIÓN (MEJORADO)
+        # SECCIÓN 2: ESTADO DE PRODUCCIÓN
         st.subheader("🔄 Estado de producción")
         
         if not df_talleres.empty:
@@ -624,7 +658,7 @@ elif menu == "🏭 Talleres":
                         try:
                             fecha_envio = pd.to_datetime(taller_row.get("Fecha Envío"))
                             dias_transcurridos = (date.today() - fecha_envio.date()).days
-                            fecha_envio_str = fecha_envio.strftime("%Y-%m-%d")  # Sin hora
+                            fecha_envio_str = fecha_envio.strftime("%Y-%m-%d")
                         except:
                             dias_transcurridos = 0
                     
@@ -677,7 +711,7 @@ elif menu == "🏭 Talleres":
                                 nuevas_falladas = st.number_input(
                                     "Prendas falladas",
                                     min_value=0,
-                                    max_value=nuevas_recibidas,  # Máximo las recibidas
+                                    max_value=nuevas_recibidas,
                                     value=prendas_falladas,
                                     key=f"fall_{idx}"
                                 )
@@ -712,34 +746,35 @@ elif menu == "🏭 Talleres":
                                     all_data = ws_talleres.get_all_values()
                                     row_index = None
                                     
-                                    for i, row in enumerate(all_data[1:], start=2):  # Saltar header
+                                    for i, row in enumerate(all_data[1:], start=2):
                                         if str(row[0]) == str(taller_row.get("ID Corte")):
                                             row_index = i
                                             break
                                     
                                     if row_index:
                                         # Actualizar valores
-                                        ws_talleres.update_cell(row_index, 7, nuevas_recibidas)  # Prendas Recibidas
-                                        ws_talleres.update_cell(row_index, 8, nuevas_falladas)   # Prendas Falladas
-                                        ws_talleres.update_cell(row_index, 9, estado_auto)       # Estado
-                                        ws_talleres.update_cell(row_index, 6, fecha_entrega.strftime("%Y-%m-%d"))  # Fecha Entrega
+                                        ws_talleres.update_cell(row_index, 7, nuevas_recibidas)
+                                        ws_talleres.update_cell(row_index, 8, nuevas_falladas)
+                                        ws_talleres.update_cell(row_index, 9, estado_auto)
+                                        ws_talleres.update_cell(row_index, 6, fecha_entrega.strftime("%Y-%m-%d"))
                                         
                                         st.success("✅ Producción actualizada correctamente")
                                         time.sleep(2)
                                         st.rerun()
                                     else:
-                                        st.error("❌ No se encontró el registro para actualizar")
+                                        st.error("❌ No se encontró el registro")
                                 
                                 except Exception as e:
                                     st.error(f"❌ Error al actualizar: {str(e)}")
             else:
                 st.info("📭 No hay cortes en producción actualmente")
         
-        # SECCIÓN 3: DASHBOARD ANALÍTICO (se mantiene igual)
-        # ... (el código del dashboard se mantiene como en la versión anterior)
+        # SECCIÓN 3: DASHBOARD ANALÍTICO
+        # ... (código del dashboard)
 
     else:
         st.info("📭 No hay cortes registrados para gestionar talleres")
+
 
 
 
