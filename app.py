@@ -831,20 +831,31 @@ elif menu == "🏭 Talleres":
                             st.info(f"**Total prendas:** {total_prendas}")
                         
                         with col_info2:
-                            st.info(f"**Recibidas actual:** {corte_info.get('Prendas Recibidas', 0)}")
-                            st.info(f"**Falladas actual:** {corte_info.get('Prendas Falladas', 0)}")
-                            st.info(f"**Estado actual:** {corte_info.get('Estado', '')}")
+                            recibidas_actual = int(corte_info.get('Prendas Recibidas', 0))
+                            falladas_actual = int(corte_info.get('Prendas Falladas', 0))
+                            estado_actual = corte_info.get('Estado', '')
+                            
+                            st.info(f"**Recibidas actual:** {recibidas_actual}")
+                            st.info(f"**Falladas actual:** {falladas_actual}")
+                            
+                            # MOSTRAR FALTANTE EN ROJO si es necesario
+                            faltante_actual = total_prendas - recibidas_actual
+                            if faltante_actual > 0 and "FALTANTES" in estado_actual:
+                                st.error(f"**⚠️ Faltante:** {faltante_actual} prendas")
+                            else:
+                                st.info(f"**Estado actual:** {estado_actual}")
                         
                         # Sistema de entregas parciales
                         st.markdown("---")
                         st.subheader("📤 Registrar Nueva Entrega")
                         
-                        with st.form(f"form_entrega_parcial_{corte_seleccionado}"):
+                        # CORRECCIÓN: Crear el formulario de manera diferente
+                        form_key = f"form_entrega_parcial_{corte_seleccionado}"
+                        with st.form(form_key):
                             col_ent1, col_ent2, col_ent3 = st.columns(3)
                             
                             with col_ent1:
                                 # Determinar número de entrega
-                                recibidas_actual = int(corte_info.get('Prendas Recibidas', 0))
                                 if recibidas_actual == 0:
                                     numero_entrega = "1ra Entrega"
                                 elif recibidas_actual < total_prendas:
@@ -854,112 +865,116 @@ elif menu == "🏭 Talleres":
                                 
                                 st.write(f"**{numero_entrega}**")
                                 
-                                # CORRECCIÓN: Key único para cada widget
                                 nuevas_recibidas = st.number_input(
                                     "Prendas recibidas en esta entrega",
                                     min_value=0,
                                     max_value=total_prendas - recibidas_actual,
                                     value=0,
-                                    key=f"nuevas_rec_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
+                                    key=f"nuevas_rec_{corte_seleccionado}"
                                 )
                             
                             with col_ent2:
-                                # CORRECCIÓN: Key único para cada widget
                                 nuevas_falladas = st.number_input(
                                     "Prendas falladas en esta entrega",
                                     min_value=0,
                                     max_value=nuevas_recibidas,
                                     value=0,
                                     help="Fallas específicas de esta entrega",
-                                    key=f"nuevas_fall_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
+                                    key=f"nuevas_fall_{corte_seleccionado}"
                                 )
                                 
-                                # CORRECCIÓN: Key único para cada widget
                                 fecha_entrega_parcial = st.date_input(
                                     "Fecha de esta entrega",
                                     value=date.today(),
-                                    key=f"fecha_ent_parcial_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
+                                    key=f"fecha_ent_parcial_{corte_seleccionado}"
                                 )
                             
                             with col_ent3:
                                 # Calcular nuevos totales
                                 total_recibidas_nuevo = recibidas_actual + nuevas_recibidas
-                                total_falladas_nuevo = int(corte_info.get('Prendas Falladas', 0)) + nuevas_falladas
+                                total_falladas_nuevo = falladas_actual + nuevas_falladas
                                 faltante_nuevo = total_prendas - total_recibidas_nuevo
                                 
-                                # Determinar estado automático
+                                # CORRECCIÓN: Lógica mejorada para el estado
                                 if total_recibidas_nuevo == 0:
                                     estado_auto = "EN PRODUCCIÓN"
-                                elif faltante_nuevo > 0 and total_falladas_nuevo == 0:
-                                    estado_auto = "ENTREGADO c/FALTANTES"
-                                elif total_falladas_nuevo > 0 and faltante_nuevo == 0:
+                                elif faltante_nuevo > 0:
+                                    if total_falladas_nuevo > 0:
+                                        estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
+                                    else:
+                                        estado_auto = "ENTREGADO c/FALTANTES"
+                                elif total_falladas_nuevo > 0:
                                     estado_auto = "ENTREGADO c/FALLAS"
-                                elif total_falladas_nuevo > 0 and faltante_nuevo > 0:
-                                    estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
                                 else:
                                     estado_auto = "ENTREGADO"
                                 
+                                # MOSTRAR FALTANTE EN ROJO en el formulario
                                 st.write(f"**Nuevo total recibidas:** {total_recibidas_nuevo}")
                                 st.write(f"**Nuevo total falladas:** {total_falladas_nuevo}")
+                                
+                                if faltante_nuevo > 0:
+                                    st.error(f"**⚠️ Nuevo faltante:** {faltante_nuevo} prendas")
+                                
                                 st.write(f"**Nuevo estado:** {estado_auto}")
                             
-                            # CORRECCIÓN: Botón fuera de las columnas para evitar duplicados
-                            submitted = st.form_submit_button("📦 Registrar Entrega Parcial")
-                            
-                            if submitted:
-                                if nuevas_recibidas > 0:
-                                    try:
-                                        # Encontrar la fila
-                                        all_data = ws_talleres.get_all_values()
-                                        row_index = None
-                                        
-                                        for i, row in enumerate(all_data[1:], start=2):
-                                            if len(row) > 1 and str(row[1]) == str(corte_seleccionado):
-                                                row_index = i
-                                                break
-                                        
-                                        if row_index:
-                                            # Actualizar con nuevos totales
-                                            ws_talleres.update_cell(row_index, 7, total_recibidas_nuevo)  # Prendas Recibidas
-                                            ws_talleres.update_cell(row_index, 8, total_falladas_nuevo)   # Prendas Falladas
-                                            ws_talleres.update_cell(row_index, 9, estado_auto)            # Estado
-                                            ws_talleres.update_cell(row_index, 6, fecha_entrega_parcial.strftime("%Y-%m-%d"))  # Fecha Entrega
-                                            
-                                            # Guardar historial en una nueva hoja
-                                            try:
-                                                ws_historial = spreadsheet.worksheet("Historial_Entregas")
-                                            except:
-                                                spreadsheet.add_worksheet(title="Historial_Entregas", rows=100, cols=10)
-                                                ws_historial = spreadsheet.worksheet("Historial_Entregas")
-                                                ws_historial.append_row(["ID Corte", "Número de Corte", "Artículo", "Taller", 
-                                                                       "Fecha Entrega", "Entrega N°", "Prendas Recibidas", 
-                                                                       "Prendas Falladas", "Total Acumulado", "Estado"])
-                                            
-                                            # Registrar en historial
-                                            registro_historial = [
-                                                corte_info.get('ID Corte', ''),
-                                                corte_seleccionado,
-                                                corte_info.get('Artículo', ''),
-                                                corte_info.get('Taller', ''),
-                                                fecha_entrega_parcial.strftime("%Y-%m-%d"),
-                                                numero_entrega,
-                                                nuevas_recibidas,
-                                                nuevas_falladas,
-                                                total_recibidas_nuevo,
-                                                estado_auto
-                                            ]
-                                            ws_historial.append_row(registro_historial)
-                                            
-                                            st.success(f"✅ {numero_entrega} registrada correctamente")
-                                            time.sleep(2)
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ No se encontró el registro")
+                            # CORRECCIÓN: Botón de submit con manejo directo
+                            submit_button = st.form_submit_button("📦 Registrar Entrega Parcial")
+                        
+                        # CORRECCIÓN: Manejar el submit fuera del form para evitar problemas de estado
+                        if submit_button:
+                            if nuevas_recibidas > 0:
+                                try:
+                                    # Encontrar la fila
+                                    all_data = ws_talleres.get_all_values()
+                                    row_index = None
                                     
-                                    except Exception as e:
-                                        st.error(f"❌ Error al registrar entrega: {str(e)}")
-                                else:
-                                    st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+                                    for i, row in enumerate(all_data[1:], start=2):
+                                        if len(row) > 1 and str(row[1]) == str(corte_seleccionado):
+                                            row_index = i
+                                            break
+                                    
+                                    if row_index:
+                                        # Actualizar con nuevos totales
+                                        ws_talleres.update_cell(row_index, 7, total_recibidas_nuevo)  # Prendas Recibidas
+                                        ws_talleres.update_cell(row_index, 8, total_falladas_nuevo)   # Prendas Falladas
+                                        ws_talleres.update_cell(row_index, 9, estado_auto)            # Estado
+                                        ws_talleres.update_cell(row_index, 6, fecha_entrega_parcial.strftime("%Y-%m-%d"))  # Fecha Entrega
+                                        
+                                        # Guardar historial en una nueva hoja
+                                        try:
+                                            ws_historial = spreadsheet.worksheet("Historial_Entregas")
+                                        except:
+                                            spreadsheet.add_worksheet(title="Historial_Entregas", rows=100, cols=10)
+                                            ws_historial = spreadsheet.worksheet("Historial_Entregas")
+                                            ws_historial.append_row(["ID Corte", "Número de Corte", "Artículo", "Taller", 
+                                                                   "Fecha Entrega", "Entrega N°", "Prendas Recibidas", 
+                                                                   "Prendas Falladas", "Total Acumulado", "Estado"])
+                                        
+                                        # Registrar en historial
+                                        registro_historial = [
+                                            corte_info.get('ID Corte', ''),
+                                            corte_seleccionado,
+                                            corte_info.get('Artículo', ''),
+                                            corte_info.get('Taller', ''),
+                                            fecha_entrega_parcial.strftime("%Y-%m-%d"),
+                                            numero_entrega,
+                                            nuevas_recibidas,
+                                            nuevas_falladas,
+                                            total_recibidas_nuevo,
+                                            estado_auto
+                                        ]
+                                        ws_historial.append_row(registro_historial)
+                                        
+                                        st.success(f"✅ {numero_entrega} registrada correctamente")
+                                        time.sleep(2)
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ No se encontró el registro")
+                                
+                                except Exception as e:
+                                    st.error(f"❌ Error al registrar entrega: {str(e)}")
+                            else:
+                                st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
 
 
 
