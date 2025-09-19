@@ -466,48 +466,55 @@ elif menu == "🏭 Talleres":
         except:
             df_talleres = pd.DataFrame()
         
-        # SECTION 1: Asignar cortes a talleres
-            st.subheader("📤 Asignar corte a taller")
+        # SECTION 1: Asignar cortes a talleres - MEJORADO
+        st.subheader("📤 Asignar corte a taller")
+        
+        # Mostrar cortes pendientes de asignar
+        if not cortes_sin_asignar.empty:
+            st.info(f"📋 **Cortes pendientes de asignar:** {len(cortes_sin_asignar)}")
+            with st.expander("Ver cortes sin asignar"):
+                # Asegurarse de que las columnas existan
+                columnas_disponibles = [col for col in ["Nro Corte", "Artículo", "Prendas", "Tipo de tela"] 
+                                       if col in cortes_sin_asignar.columns]
+                st.dataframe(cortes_sin_asignar[columnas_disponibles], use_container_width=True)
             
-            cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
-            
-            if not cortes_sin_asignar.empty:
-                with st.form("form_asignar_taller"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        corte_seleccionado = st.selectbox(
-                            "Seleccionar corte",
-                            cortes_sin_asignar["Nro Corte"].unique()
-                        )
-                        taller = st.text_input("Nombre del taller")
-                        fecha_envio = st.date_input("Fecha de envío", value=date.today())
+            with st.form("form_asignar_taller"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    corte_seleccionado = st.selectbox(
+                        "Seleccionar corte",
+                        cortes_sin_asignar["Nro Corte"].unique()
+                    )
+                    taller = st.text_input("Nombre del taller")
+                    fecha_envio = st.date_input("Fecha de envío", value=date.today())
+                
+                with col2:
+                    info_corte = cortes_sin_asignar[cortes_sin_asignar["Nro Corte"] == corte_seleccionado].iloc[0]
+                    st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
+                    st.write(f"**Prendas totales:** {info_corte.get('Prendas', '')}")
+                    st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
+                
+                submitted = st.form_submit_button("✅ Asignar a taller")
+                
+                if submitted:
+                    nuevo_registro = {
+                        "ID Corte": str(info_corte.get("ID", "")),
+                        "Nro Corte": str(corte_seleccionado),
+                        "Artículo": str(info_corte.get('Artículo', '')),
+                        "Taller": str(taller),
+                        "Fecha Envío": fecha_envio.strftime("%Y-%m-%d"),
+                        "Fecha Entrega": "",
+                        "Prendas Recibidas": 0,
+                        "Prendas Falladas": 0,
+                        "Estado": "EN PRODUCCIÓN",
+                        "Días Transcurridos": 0
+                    }
                     
-                    with col2:
-                        # Obtener información del corte seleccionado (actualizado dinámicamente)
-                        info_corte = cortes_sin_asignar[cortes_sin_asignar["Nro Corte"] == corte_seleccionado].iloc[0]
-                        st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
-                        st.write(f"**Prendas totales:** {info_corte.get('Prendas', '')}")
-                        st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
-                    
-                    submitted = st.form_submit_button("✅ Asignar a taller")
-                    
-                    if submitted:
-                        nuevo_registro = {
-                            "ID Corte": str(info_corte.get("ID", "")),
-                            "Nro Corte": str(corte_seleccionado),
-                            "Artículo": str(info_corte.get('Artículo', '')),
-                            "Taller": str(taller),
-                            "Fecha Envío": fecha_envio.strftime("%Y-%m-%d"),
-                            "Fecha Entrega": "",
-                            "Prendas Recibidas": 0,
-                            "Prendas Falladas": 0,
-                            "Estado": "EN PRODUCCIÓN",
-                            "Días Transcurridos": 0
-                        }
-                        
-                        ws_talleres.append_row(list(nuevo_registro.values()))
-                        st.success(f"Corte {corte_seleccionado} asignado a {taller}")
-                        st.rerun()
+                    ws_talleres.append_row(list(nuevo_registro.values()))
+                    st.success(f"Corte {corte_seleccionado} asignado a {taller}")
+                    st.rerun()
+        else:
+            st.success("✅ Todos los cortes han sido asignados a talleres")
         
         # SECTION 2: Actualizar estados de talleres
         st.subheader("🔄 Actualizar estado de producción")
@@ -596,7 +603,7 @@ elif menu == "🏭 Talleres":
                     for _, taller_row in df_entregados.iterrows():
                         st.write(f"• {taller_row.get('Artículo', '')} - {taller_row.get('Taller', '')}")
         
-        # SECTION 3: Dashboard de seguimiento
+        # SECTION 3: Dashboard de Seguimiento - VERSIÓN SIN PLOTLY
         st.subheader("📈 Dashboard de Seguimiento")
         
         if not df_talleres.empty:
@@ -655,12 +662,16 @@ elif menu == "🏭 Talleres":
                 for _, alerta in alertas_normales.iterrows():
                     st.write(f"• {alerta.get('Artículo', '')} en {alerta.get('Taller', '')}: {alerta['Días Transcurridos']} días")
             
-            # Gráficos
+            # Gráficos con Streamlit nativo (sin plotly)
             tab1, tab2, tab3 = st.tabs(["📊 Estado Producción", "📈 Rendimiento Talleres", "📋 Detalle"])
             
             with tab1:
-                fig_estado = px.pie(df_filtrado, names='Estado', title='Distribución por Estado')
-                st.plotly_chart(fig_estado, use_container_width=True)
+                # Gráfico de torta con Streamlit
+                estado_counts = df_filtrado['Estado'].value_counts()
+                st.bar_chart(estado_counts)
+                st.write("**Distribución por Estado:**")
+                for estado, count in estado_counts.items():
+                    st.write(f"- {estado}: {count} cortes")
             
             with tab2:
                 if not df_filtrado.empty:
@@ -671,9 +682,10 @@ elif menu == "🏭 Talleres":
                     }).reset_index()
                     df_rendimiento['% Falla'] = (df_rendimiento['Prendas Falladas'] / df_rendimiento['Prendas Recibidas'] * 100).fillna(0)
                     
-                    fig_rendimiento = px.bar(df_rendimiento, x='Taller', y='Prendas Recibidas', 
-                                           title='Prendas Recibidas por Taller')
-                    st.plotly_chart(fig_rendimiento, use_container_width=True)
+                    st.bar_chart(df_rendimiento.set_index('Taller')['Prendas Recibidas'])
+                    st.write("**Rendimiento por Taller:**")
+                    for _, row in df_rendimiento.iterrows():
+                        st.write(f"- {row['Taller']}: {row['Prendas Recibidas']} prendas ({row['% Falla']:.1f}% fallas)")
             
             with tab3:
                 # Mostrar tabla sin ID Corte (redundante)
