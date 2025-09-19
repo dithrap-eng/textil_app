@@ -21,7 +21,20 @@ def init_connection():
     return client
 
 client = init_connection()
-
+# ←←← AGREGAR ESTA FUNCIÓN AQUÍ ←←←
+@st.cache_data(ttl=600)  # Cache por 10 minutos
+def cargar_datos(solapa):
+    """
+    Carga datos de una solapa específica de Google Sheets
+    """
+    try:
+        sheet = client.open(SHEET_NAME).worksheet(solapa)
+        data = sheet.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error al cargar datos de {solapa}: {str(e)}")
+        return pd.DataFrame()
+        
 spreadsheet = client.open(SHEET_NAME)
 
 # =====================
@@ -928,6 +941,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
