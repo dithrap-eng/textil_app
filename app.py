@@ -357,8 +357,6 @@ elif menu == "✂ Cortes":
     df_cortes = get_cortes_resumen()
     
     if not df_cortes.empty:
-        # Mostrar las columnas disponibles para debugging
-        st.write(f"Columnas disponibles: {list(df_cortes.columns)}")
         
         # Buscar nombres alternativos de columnas
         column_mapping = {
@@ -425,8 +423,7 @@ elif menu == "✂ Cortes":
             consumo_promedio = total_consumo / total_prendas if total_prendas > 0 else 0
             
             st.write(f"**Total general:** {total_prendas:,.0f} prendas, {total_consumo:,.2f} m de tela")
-            st.write(f"**Consumo promedio:** {consumo_promedio:,.2f} m por prenda")
-            
+                 
     else:
         st.info("No hay cortes registrados aún.")
     
@@ -941,6 +938,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
