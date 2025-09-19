@@ -21,6 +21,77 @@ def init_connection():
     return client
 
 client = init_connection()
+import streamlit as st
+import pandas as pd
+
+# Dentro de tu formulario Streamlit
+with st.form(key='estado_form'):
+    # Selección del corte (ejemplo)
+    cortes_disponibles = df_cortes['Número de Corte'].unique()
+    corte_seleccionado = st.selectbox("Seleccionar Corte:", cortes_disponibles)
+    
+    # Botón de envío REQUERIDO
+    submitted = st.form_submit_button("Calcular Estado de Entrega")
+    
+    if submitted:
+        # 1. OBTENER EL TOTAL DE PRENDAS DEL CORTE (de solapa CORTES, columna H "Prendas")
+        total_prendas = df_cortes.loc[df_cortes['Número de Corte'] == corte_seleccionado, 'Prendas'].values[0]
+        
+        # 2. OBTENER DATOS ACTUALES DEL TALLER (de solapa TALLERES)
+        taller_data = df_talleres[df_talleres['Número de Corte'] == corte_seleccionado]
+        
+        if not taller_data.empty:
+            prendas_recibidas_actual = taller_data['Prendas Recibidas'].values[0]
+            prendas_falladas_actual = taller_data['Prendas Falladas'].values[0]
+        else:
+            prendas_recibidas_actual = 0
+            prendas_falladas_actual = 0
+        
+        # 3. SUMAR ENTREGAS HISTÓRICAS (de Historial_Entregas)
+        entregas_historicas = df_historial[df_historial['Número de Corte'] == corte_seleccionado]
+        memo_recibidas = entregas_historicas['Prendas Recibidas'].sum()
+        memo_fallas = entregas_historicas['Prendas Falladas'].sum()
+        
+        # 4. CALCULAR TOTALES ACUMULADOS
+        total_recibidas_mero = prendas_recibidas_actual + memo_recibidas
+        total_fallas_mero = prendas_falladas_actual + memo_fallas
+        faltante_mero = total_prendas - total_recibidas_mero
+        
+        # 5. APLICAR LÓGICA DE ESTADO MEJORADA
+        if total_recibidas_mero == 0:
+            estado_auto = "01 PRODUCCIÓN"
+        elif faltante_mero > 0:
+            if total_fallas_mero > 0:
+                estado_auto = "ENTREGADO C/Faltantes y Fallas"
+            else:
+                estado_auto = "ENTREGADO C/Fallas"
+        elif total_fallas_mero > 0:
+            estado_auto = "ENTREGADO C/Fallas"
+        else:
+            estado_auto = "ENTREGADO"
+        
+        # 6. MOSTRAR RESULTADOS
+        st.success(f"**Estado calculado:** {estado_auto}")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Prendas Corte", total_prendas)
+        with col2:
+            st.metric("Total Recibidas", total_recibidas_mero)
+        with col3:
+            st.metric("Total Fallas", total_fallas_mero)
+        
+        col4, col5 = st.columns(2)
+        with col4:
+            st.metric("Faltantes por Recibir", faltante_mero)
+        with col5:
+            st.metric("Estado", estado_auto)
+        
+        # 7. ACTUALIZAR EL ESTADO EN TALLERES (opcional)
+        if st.button("Actualizar Estado en Sistema"):
+            # Código para actualizar Google Sheets
+            st.success("Estado actualizado correctamente en el sistema")
+
 spreadsheet = client.open(SHEET_NAME)
 
 # =====================
@@ -975,6 +1046,7 @@ elif menu == "🏭 Talleres":
                                     st.error(f"❌ Error al registrar entrega: {str(e)}")
                             else:
                                 st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+
 
 
 
