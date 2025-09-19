@@ -426,27 +426,26 @@ elif menu == "✂ Cortes":
                 st.success("✅ Corte registrado y stock actualizado correctamente")
                 st.balloons()
 
-    # -------------------------------
+  # -------------------------------
     # RESUMEN DE CORTES (VERSIÓN CORREGIDA)
     # -------------------------------
     st.subheader("📊 Resumen de cortes registrados")
     
     def get_cortes_resumen():
         try:
-            ws_cortes = spreadsheet.worksheet("Cortes")  # ← Asegúrate que sea "cortes" en minúsculas
+            ws_cortes = spreadsheet.worksheet("Cortes")
             data = ws_cortes.get_all_records()
             df = pd.DataFrame(data)
             return df
         except:
             return pd.DataFrame()
     
-    df_cortes = get_Cortes_resumen()
+    df_cortes = get_cortes_resumen()
     
-    if not df_Cortes.empty:
+    if not df_cortes.empty:
         
         # Buscar nombres alternativos de columnas
         column_mapping = {
-            'nro_corte': ['Nro corte', 'Número de corte', 'Nro Corte', 'Número Corte', 'Corte Número'],
             'consumo_total': ['Consumo total (m)', 'Consumo total', 'Consumo', 'Total metros'],
             'cantidad_prendas': ['Cantidad de prendas', 'Prendas', 'Cantidad prendas', 'Cantidad'],
             'consumo_x_prenda': ['Consumo x prenda (m)', 'Consumo por prenda', 'Metros por prenda']
@@ -456,32 +455,32 @@ elif menu == "✂ Cortes":
         real_columns = {}
         for key, possible_names in column_mapping.items():
             for name in possible_names:
-                if name in df_Cortes.columns:
+                if name in df_cortes.columns:
                     real_columns[key] = name
                     break
         
         # Convertir columnas numéricas si existen
         if 'consumo_total' in real_columns:
-            df_Cortes[real_columns['consumo_total']] = pd.to_numeric(
-                df_Cortes[real_columns['consumo_total']], errors="coerce"
+            df_cortes[real_columns['consumo_total']] = pd.to_numeric(
+                df_cortes[real_columns['consumo_total']], errors="coerce"
             )
         
         if 'cantidad_prendas' in real_columns:
-            df_Cortes[real_columns['cantidad_prendas']] = pd.to_numeric(
-                df_Cortes[real_columns['cantidad_prendas']], errors="coerce"
+            df_cortes[real_columns['cantidad_prendas']] = pd.to_numeric(
+                df_cortes[real_columns['cantidad_prendas']], errors="coerce"
             )
         
         # Calcular consumo por prenda si no existe la columna
         if 'consumo_x_prenda' not in real_columns and 'consumo_total' in real_columns and 'cantidad_prendas' in real_columns:
-            df_Cortes['Consumo x prenda (m)'] = df_Cortes[real_columns['consumo_total']] / df_Cortes[real_columns['cantidad_prendas']]
+            df_cortes['Consumo x prenda (m)'] = df_cortes[real_columns['consumo_total']] / df_cortes[real_columns['cantidad_prendas']]
             real_columns['consumo_x_prenda'] = 'Consumo x prenda (m)'
         
         # Formatear para mostrar
-        df_mostrar_cortes = df_Cortes.copy()
+        df_mostrar_cortes = df_cortes.copy()
         
         # Formatear columnas numéricas
         if 'consumo_total' in real_columns:
-            df_mostrar_Cortes[real_columns['consumo_total']] = df_mostrar_cortes[real_columns['consumo_total']].apply(
+            df_mostrar_cortes[real_columns['consumo_total']] = df_mostrar_cortes[real_columns['consumo_total']].apply(
                 lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
             )
         
@@ -490,30 +489,17 @@ elif menu == "✂ Cortes":
                 lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
             )
         
-        # ⬇️⬇️⬇️ ORDEN CORRECTO DE COLUMNAS ⬇️⬇️⬇️
+        # Mostrar columnas relevantes (usar nombres reales)
         columnas_a_mostrar = []
-        
-        # Primero las columnas básicas en el orden deseado
         for col in ["Fecha", "Nro corte", "Artículo", "Tipo de tela"]:
-            col_encontrada = False
-            # Buscar el nombre exacto de la columna en el DataFrame
-            for col_name in df_mostrar_cortes.columns:
-                if col_name.lower() == col.lower():
-                    columnas_a_mostrar.append(col_name)
-                    col_encontrada = True
-                    break
-            
-            # Si no se encuentra, intentar con el mapeo de nombres alternativos
-            if not col_encontrada and col == "Nro corte" and 'nro_corte' in real_columns:
-                columnas_a_mostrar.append(real_columns['nro_corte'])
-                col_encontrada = True
+            if col in df_mostrar_cortes.columns:
+                columnas_a_mostrar.append(col)
         
         # Agregar columnas numéricas si existen
         for key in ['consumo_total', 'cantidad_prendas', 'consumo_x_prenda']:
             if key in real_columns:
                 columnas_a_mostrar.append(real_columns[key])
         
-        # Mostrar el DataFrame con el orden correcto
         st.dataframe(df_mostrar_cortes[columnas_a_mostrar], use_container_width=True)
         
         # Mostrar estadísticas
@@ -1038,6 +1024,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
