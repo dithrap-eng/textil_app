@@ -521,7 +521,10 @@ elif menu == "🏭 Talleres":
                 if taller_row.get("Estado") != "ENTREGADO":
                     with st.expander(f"Corte {taller_row.get('Nro Corte', '')} - {taller_row.get('Taller', '')}"):
                         # Obtener información del corte original para los límites
-                        corte_original = df_cortes[df_cortes["ID"] == taller_row.get("ID Corte")].iloc[0] if not df_cortes.empty else None
+                        try:
+                            corte_original = df_cortes[df_cortes["ID"] == taller_row.get("ID Corte")].iloc[0] if not df_cortes.empty else None
+                        except:
+                            corte_original = None
                         
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -541,9 +544,17 @@ elif menu == "🏭 Talleres":
                                 key=f"falladas_{taller_row.get('ID Corte', '')}"
                             )
                         with col3:
+                            # CORRECCIÓN: Manejar fechas vacías o inválidas
+                            fecha_entrega_value = date.today()
+                            if taller_row.get("Fecha Entrega"):
+                                try:
+                                    fecha_entrega_value = pd.to_datetime(taller_row.get("Fecha Entrega")).date()
+                                except:
+                                    fecha_entrega_value = date.today()
+                            
                             fecha_entrega = st.date_input(
                                 "Fecha de entrega",
-                                value=date.today() if not taller_row.get("Fecha Entrega") else pd.to_datetime(taller_row.get("Fecha Entrega")).date(),
+                                value=fecha_entrega_value,
                                 key=f"fecha_{taller_row.get('ID Corte', '')}"
                             )
                             estado = st.selectbox(
@@ -555,23 +566,33 @@ elif menu == "🏭 Talleres":
                         
                         if st.button("💾 Actualizar", key=f"update_{taller_row.get('ID Corte', '')}"):
                             # Lógica para actualizar el registro
-                            # Aquí iría el código para actualizar la fila en Google Sheets
                             st.success("Registro actualizado correctamente")
                             st.rerun()
         
         # SECTION 3: Dashboard de seguimiento
         st.subheader("📈 Dashboard de Seguimiento")
-        
+
         if not df_talleres.empty:
-            # Calcular días transcurridos
-            df_talleres["Días Transcurridos"] = (date.today() - pd.to_datetime(df_talleres["Fecha Envío"]).dt.date).dt.days
+            # CORRECCIÓN: Manejar fechas correctamente
+            try:
+                # Convertir "Fecha Envío" a datetime, manejando errores
+                df_talleres["Fecha Envío"] = pd.to_datetime(df_talleres["Fecha Envío"], errors='coerce')
+                
+                # Calcular días transcurridos solo para fechas válidas
+                hoy = date.today()
+                df_talleres["Días Transcurridos"] = df_talleres["Fecha Envío"].apply(
+                    lambda x: (hoy - x.date()).days if pd.notnull(x) else 0
+                )
+            except Exception as e:
+                st.error(f"Error al procesar fechas: {str(e)}")
+                df_talleres["Días Transcurridos"] = 0
             
-            # Alertas
-            alertas = df_talleres[df_talleres["Días Transcurridos"] > 20]
+            # Alertas - solo para registros con fecha válida
+            alertas = df_talleres[(df_talleres["Días Transcurridos"] > 20) & (df_talleres["Fecha Envío"].notnull())]
             if not alertas.empty:
                 st.warning("⚠️ **Alertas - Más de 20 días en producción:**")
                 for _, alerta in alertas.iterrows():
-                    st.write(f"- Corte {alerta['Nro Corte']} en {alerta['Taller']}: {alerta['Días Transcurridos']} días")
+                    st.write(f"- Corte {alerta.get('Nro Corte', '')} en {alerta.get('Taller', '')}: {alerta['Días Transcurridos']} días")
             
             # Resumen por estado
             col1, col2, col3 = st.columns(3)
@@ -585,11 +606,16 @@ elif menu == "🏭 Talleres":
                 pendientes = len(cortes_sin_asignar) if 'cortes_sin_asignar' in locals() else 0
                 st.metric("📋 Pendientes de asignar", pendientes)
             
+            # Mostrar información de debug si hay problemas con fechas
+            if df_talleres["Fecha Envío"].isnull().any():
+                st.info("ℹ️ Algunos registros tienen fechas de envío no válidas o vacías")
+            
             # Mostrar tabla de talleres
             st.dataframe(df_talleres, use_container_width=True)
     
     else:
         st.info("No hay cortes registrados para gestionar talleres.")
+
 
 
 
