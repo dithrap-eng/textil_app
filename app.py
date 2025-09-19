@@ -799,7 +799,7 @@ elif menu == "🏭 Talleres":
                     ''', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         
-        # SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES
+        # SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES (VERSIÓN CORREGIDA)
         st.subheader("📦 Sistema de Entregas Parciales")
         
         if not df_talleres.empty:
@@ -809,7 +809,7 @@ elif menu == "🏭 Talleres":
                 cortes_disponibles = df_talleres[columna_nro_corte].dropna().unique().tolist()
                 
                 if cortes_disponibles:
-                    corte_seleccionado = st.selectbox("Seleccionar corte para gestión de entregas", cortes_disponibles)
+                    corte_seleccionado = st.selectbox("Seleccionar corte para gestión de entregas", cortes_disponibles, key="select_entregas")
                     
                     if corte_seleccionado:
                         corte_info = df_talleres[df_talleres[columna_nro_corte] == corte_seleccionado].iloc[0]
@@ -854,28 +854,31 @@ elif menu == "🏭 Talleres":
                                 
                                 st.write(f"**{numero_entrega}**")
                                 
+                                # CORRECCIÓN: Key único para cada widget
                                 nuevas_recibidas = st.number_input(
                                     "Prendas recibidas en esta entrega",
                                     min_value=0,
                                     max_value=total_prendas - recibidas_actual,
                                     value=0,
-                                    key=f"nuevas_rec_{corte_seleccionado}"
+                                    key=f"nuevas_rec_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
                                 )
                             
                             with col_ent2:
+                                # CORRECCIÓN: Key único para cada widget
                                 nuevas_falladas = st.number_input(
                                     "Prendas falladas en esta entrega",
                                     min_value=0,
                                     max_value=nuevas_recibidas,
                                     value=0,
                                     help="Fallas específicas de esta entrega",
-                                    key=f"nuevas_fall_{corte_seleccionado}"
+                                    key=f"nuevas_fall_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
                                 )
                                 
+                                # CORRECCIÓN: Key único para cada widget
                                 fecha_entrega_parcial = st.date_input(
                                     "Fecha de esta entrega",
                                     value=date.today(),
-                                    key=f"fecha_ent_parcial_{corte_seleccionado}"
+                                    key=f"fecha_ent_parcial_{corte_seleccionado}_{int(time.time())}"  # Key único con timestamp
                                 )
                             
                             with col_ent3:
@@ -900,7 +903,10 @@ elif menu == "🏭 Talleres":
                                 st.write(f"**Nuevo total falladas:** {total_falladas_nuevo}")
                                 st.write(f"**Nuevo estado:** {estado_auto}")
                             
-                            if st.form_submit_button("📦 Registrar Entrega Parcial"):
+                            # CORRECCIÓN: Botón fuera de las columnas para evitar duplicados
+                            submitted = st.form_submit_button("📦 Registrar Entrega Parcial")
+                            
+                            if submitted:
                                 if nuevas_recibidas > 0:
                                     try:
                                         # Encontrar la fila
@@ -954,6 +960,7 @@ elif menu == "🏭 Talleres":
                                         st.error(f"❌ Error al registrar entrega: {str(e)}")
                                 else:
                                     st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+
 
 
 
