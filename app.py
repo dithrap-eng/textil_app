@@ -433,7 +433,7 @@ elif menu == "✂ Cortes":
     
     def get_cortes_resumen():
         try:
-            ws_cortes = spreadsheet.worksheet("Cortes")
+            ws_cortes = spreadsheet.worksheet("cortes")  # ← Asegúrate que sea "cortes" en minúsculas
             data = ws_cortes.get_all_records()
             df = pd.DataFrame(data)
             return df
@@ -446,6 +446,7 @@ elif menu == "✂ Cortes":
         
         # Buscar nombres alternativos de columnas
         column_mapping = {
+            'nro_corte': ['Nro corte', 'Número de corte', 'Nro Corte', 'Número Corte', 'Corte Número'],
             'consumo_total': ['Consumo total (m)', 'Consumo total', 'Consumo', 'Total metros'],
             'cantidad_prendas': ['Cantidad de prendas', 'Prendas', 'Cantidad prendas', 'Cantidad'],
             'consumo_x_prenda': ['Consumo x prenda (m)', 'Consumo por prenda', 'Metros por prenda']
@@ -489,17 +490,26 @@ elif menu == "✂ Cortes":
                 lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
             )
         
-        # Mostrar columnas relevantes (usar nombres reales)
+        # ⬇️⬇️⬇️ ORDEN CORRECTO DE COLUMNAS ⬇️⬇️⬇️
         columnas_a_mostrar = []
+        
+        # Primero las columnas básicas en el orden deseado
         for col in ["Fecha", "Nro corte", "Artículo", "Tipo de tela"]:
-            if col in df_mostrar_cortes.columns:
-                columnas_a_mostrar.append(col)
+            # Buscar el nombre exacto de la columna en el DataFrame
+            for col_name in df_mostrar_cortes.columns:
+                if col_name.lower() == col.lower():
+                    columnas_a_mostrar.append(col_name)
+                    break
+            # Si no se encuentra, intentar con el mapeo de nombres alternativos
+            elif col == "Nro corte" and 'nro_corte' in real_columns:
+                columnas_a_mostrar.append(real_columns['nro_corte'])
         
         # Agregar columnas numéricas si existen
         for key in ['consumo_total', 'cantidad_prendas', 'consumo_x_prenda']:
             if key in real_columns:
                 columnas_a_mostrar.append(real_columns[key])
         
+        # Mostrar el DataFrame con el orden correcto
         st.dataframe(df_mostrar_cortes[columnas_a_mostrar], use_container_width=True)
         
         # Mostrar estadísticas
@@ -1024,6 +1034,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
