@@ -433,16 +433,16 @@ elif menu == "✂ Cortes":
     
     def get_cortes_resumen():
         try:
-            ws_cortes = spreadsheet.worksheet("cortes")  # ← Asegúrate que sea "cortes" en minúsculas
+            ws_cortes = spreadsheet.worksheet("Cortes")  # ← Asegúrate que sea "cortes" en minúsculas
             data = ws_cortes.get_all_records()
             df = pd.DataFrame(data)
             return df
         except:
             return pd.DataFrame()
     
-    df_cortes = get_cortes_resumen()
+    df_cortes = get_Cortes_resumen()
     
-    if not df_cortes.empty:
+    if not df_Cortes.empty:
         
         # Buscar nombres alternativos de columnas
         column_mapping = {
@@ -456,32 +456,32 @@ elif menu == "✂ Cortes":
         real_columns = {}
         for key, possible_names in column_mapping.items():
             for name in possible_names:
-                if name in df_cortes.columns:
+                if name in df_Cortes.columns:
                     real_columns[key] = name
                     break
         
         # Convertir columnas numéricas si existen
         if 'consumo_total' in real_columns:
-            df_cortes[real_columns['consumo_total']] = pd.to_numeric(
-                df_cortes[real_columns['consumo_total']], errors="coerce"
+            df_Cortes[real_columns['consumo_total']] = pd.to_numeric(
+                df_Cortes[real_columns['consumo_total']], errors="coerce"
             )
         
         if 'cantidad_prendas' in real_columns:
-            df_cortes[real_columns['cantidad_prendas']] = pd.to_numeric(
-                df_cortes[real_columns['cantidad_prendas']], errors="coerce"
+            df_Cortes[real_columns['cantidad_prendas']] = pd.to_numeric(
+                df_Cortes[real_columns['cantidad_prendas']], errors="coerce"
             )
         
         # Calcular consumo por prenda si no existe la columna
         if 'consumo_x_prenda' not in real_columns and 'consumo_total' in real_columns and 'cantidad_prendas' in real_columns:
-            df_cortes['Consumo x prenda (m)'] = df_cortes[real_columns['consumo_total']] / df_cortes[real_columns['cantidad_prendas']]
+            df_Cortes['Consumo x prenda (m)'] = df_Cortes[real_columns['consumo_total']] / df_Cortes[real_columns['cantidad_prendas']]
             real_columns['consumo_x_prenda'] = 'Consumo x prenda (m)'
         
         # Formatear para mostrar
-        df_mostrar_cortes = df_cortes.copy()
+        df_mostrar_cortes = df_Cortes.copy()
         
         # Formatear columnas numéricas
         if 'consumo_total' in real_columns:
-            df_mostrar_cortes[real_columns['consumo_total']] = df_mostrar_cortes[real_columns['consumo_total']].apply(
+            df_mostrar_Cortes[real_columns['consumo_total']] = df_mostrar_cortes[real_columns['consumo_total']].apply(
                 lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else ""
             )
         
@@ -1038,6 +1038,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
