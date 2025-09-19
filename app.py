@@ -495,14 +495,18 @@ elif menu == "✂ Cortes":
         
         # Primero las columnas básicas en el orden deseado
         for col in ["Fecha", "Nro corte", "Artículo", "Tipo de tela"]:
+            col_encontrada = False
             # Buscar el nombre exacto de la columna en el DataFrame
             for col_name in df_mostrar_cortes.columns:
                 if col_name.lower() == col.lower():
                     columnas_a_mostrar.append(col_name)
+                    col_encontrada = True
                     break
+            
             # Si no se encuentra, intentar con el mapeo de nombres alternativos
-            elif col == "Nro corte" and 'nro_corte' in real_columns:
+            if not col_encontrada and col == "Nro corte" and 'nro_corte' in real_columns:
                 columnas_a_mostrar.append(real_columns['nro_corte'])
+                col_encontrada = True
         
         # Agregar columnas numéricas si existen
         for key in ['consumo_total', 'cantidad_prendas', 'consumo_x_prenda']:
@@ -1034,6 +1038,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
