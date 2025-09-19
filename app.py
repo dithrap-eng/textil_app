@@ -769,11 +769,113 @@ elif menu == "🏭 Talleres":
             else:
                 st.info("📭 No hay cortes en producción actualmente")
         
-        # SECCIÓN 3: DASHBOARD ANALÍTICO
-        # ... (código del dashboard)
+ # SECCIÓN 3: DASHBOARD ANALÍTICO
+        st.subheader("📈 Dashboard de Seguimiento")
+        
+        if not df_talleres.empty:
+            # Filtros
+            col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
+            
+            with col_filtro1:
+                talleres_disponibles = df_talleres["Taller"].unique().tolist()
+                taller_filtro = st.multiselect(
+                    "Filtrar por taller",
+                    options=talleres_disponibles,
+                    default=talleres_disponibles
+                )
+            
+            with col_filtro2:
+                estados_disponibles = df_talleres["Estado"].unique().tolist()
+                estado_filtro = st.multiselect(
+                    "Filtrar por estado",
+                    options=estados_disponibles,
+                    default=["EN PRODUCCIÓN"]
+                )
+            
+            with col_filtro3:
+                dias_filtro = st.slider(
+                    "Días en producción (mínimo)",
+                    min_value=0,
+                    max_value=60,
+                    value=0
+                )
+            
+            # Aplicar filtros
+            df_filtrado = df_talleres[
+                (df_talleres["Taller"].isin(taller_filtro)) &
+                (df_talleres["Estado"].isin(estado_filtro))
+            ].copy()
+            
+            # Calcular días transcurridos para el filtro
+            try:
+                df_filtrado["Fecha Envío"] = pd.to_datetime(df_filtrado["Fecha Envío"], errors='coerce')
+                df_filtrado["Días Transcurridos"] = (date.today() - df_filtrado["Fecha Envío"].dt.date).dt.days
+                df_filtrado = df_filtrado[df_filtrado["Días Transcurridos"] >= dias_filtro]
+            except:
+                pass
+            
+            # Métricas por taller
+            st.write("### 📊 Métricas por Taller")
+            
+            for taller in taller_filtro:
+                df_taller = df_filtrado[df_filtrado["Taller"] == taller]
+                if not df_taller.empty:
+                    en_prod_taller = len(df_taller[df_taller["Estado"] == "EN PRODUCCIÓN"])
+                    entregados_taller = len(df_taller[df_taller["Estado"] == "ENTREGADO"])
+                    
+                    col_met1, col_met2, col_met3 = st.columns(3)
+                    
+                    with col_met1:
+                        st.metric(f"{taller}", f"{len(df_taller)} cortes")
+                    
+                    with col_met2:
+                        st.metric("En producción", en_prod_taller)
+                    
+                    with col_met3:
+                        st.metric("Entregados", entregados_taller)
+            
+            # Gráficos y tabla
+            tab1, tab2 = st.tabs(["📋 Detalle de Cortes", "📈 Estadísticas"])
+            
+            with tab1:
+                columnas_mostrar = [col for col in df_filtrado.columns if col != "ID Corte"]
+                df_mostrar = df_filtrado[columnas_mostrar].copy()
+                
+                # Formatear fechas
+                for col in ["Fecha Envío", "Fecha Entrega"]:
+                    if col in df_mostrar.columns:
+                        df_mostrar[col] = pd.to_datetime(df_mostrar[col]).dt.strftime("%Y-%m-%d")
+                
+                st.dataframe(df_mostrar, use_container_width=True, height=400)
+            
+            with tab2:
+                if not df_filtrado.empty:
+                    # Gráfico de rendimiento por taller
+                    rendimiento = df_filtrado.groupby("Taller").agg({
+                        "Prendas Recibidas": "sum",
+                        "Prendas Falladas": "sum"
+                    }).reset_index()
+                    
+                    rendimiento["Eficiencia"] = ((rendimiento["Prendas Recibidas"] - rendimiento["Prendas Falladas"]) / 
+                                               rendimiento["Prendas Recibidas"].replace(0, 1)) * 100
+                    
+                    st.bar_chart(rendimiento.set_index("Taller")["Eficiencia"])
+                    
+                    # Estadísticas adicionales
+                    col_stat1, col_stat2 = st.columns(2)
+                    
+                    with col_stat1:
+                        st.write("**📈 Rendimiento por taller:**")
+                        for _, row in rendimiento.iterrows():
+                            st.write(f"- {row['Taller']}: {row['Eficiencia']:.1f}% eficiencia")
+                    
+                    with col_stat2:
+                        st.write("**⏱️ Tiempos promedio:**")
+                        # Aquí podrías agregar cálculos de tiempos promedio por taller
 
     else:
         st.info("📭 No hay cortes registrados para gestionar talleres")
+
 
 
 
