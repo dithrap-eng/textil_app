@@ -323,22 +323,85 @@ elif menu == "✂ Cortes":
     colores_sel = st.multiselect("Colores usados", colores)
 
     lineas = []
-    for c in colores_sel:
-        stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == c)]["Rollos"].sum())
-        st.write(f"Stock disponible de {c}: {stock_color} rollos")
-        rollos_usados = st.number_input(f"Rollos consumidos de {c}", min_value=0, step=1, key=f"corte_{c}")
-        if rollos_usados > 0:
-            lineas.append({"color": c, "rollos": rollos_usados})
+    
+    # Contenedor principal para colores con mejor diseño
+    with st.container():
+        st.subheader("📊 Gestión de Colores y Rollos")
+        
+        for i, c in enumerate(colores_sel):
+            # Crear un recuadro diferenciado para cada color
+            with st.expander(f"🎨 **{c}**", expanded=True):
+                # Dividir en columnas para mejor organización
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & 
+                                              (df_stock["Color"] == c)]["Rollos"].sum())
+                    
+                    # Mostrar stock con indicador visual
+                    if stock_color > 5:
+                        st.success(f"**Stock disponible:** {stock_color} rollos")
+                    elif stock_color > 2:
+                        st.warning(f"**Stock disponible:** {stock_color} rollos")
+                    else:
+                        st.error(f"**Stock disponible:** {stock_color} rollos")
+                
+                with col2:
+                    rollos_usados = st.number_input(
+                        f"Rollos consumidos", 
+                        min_value=0, 
+                        max_value=stock_color,
+                        step=1, 
+                        key=f"corte_{c}_{i}",
+                        help=f"Máximo disponible: {stock_color} rollos"
+                    )
+                
+                # Separador visual entre colores
+                if i < len(colores_sel) - 1:
+                    st.markdown("---")
+                
+                if rollos_usados > 0:
+                    lineas.append({"color": c, "rollos": rollos_usados})
 
-    consumo_total = st.number_input("Consumo total (m)", min_value=0.0, step=0.5)
-    prendas = st.number_input("Cantidad de prendas", min_value=1, step=1)
-    consumo_x_prenda = consumo_total / prendas if prendas > 0 else 0
+    # Sección de consumo y prendas
+    st.markdown("---")
+    st.subheader("📦 Datos de Producción")
+    
+    col_consumo, col_prendas = st.columns(2)
+    
+    with col_consumo:
+        consumo_total = st.number_input("Consumo total (m)", min_value=0.0, step=0.5, format="%.2f")
+    
+    with col_prendas:
+        prendas = st.number_input("Cantidad de prendas", min_value=1, step=1)
+    
+    # Mostrar consumo por prenda con mejor diseño
+    if prendas > 0 and consumo_total > 0:
+        consumo_x_prenda = consumo_total / prendas
+        st.metric(
+            "🧵 Consumo por prenda", 
+            f"{consumo_x_prenda:.2f} m",
+            help="Consumo total dividido por cantidad de prendas"
+        )
+    else:
+        st.info("ℹ️ Complete consumo total y cantidad de prendas para calcular el consumo por prenda")
 
-    st.metric("Consumo por prenda (m)", round(consumo_x_prenda, 2))
-
-    if st.button("💾 Guardar corte"):
-        insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
-        st.success("✅ Corte registrado y stock actualizado")
+    # Botón de guardar con mejor diseño
+    st.markdown("---")
+    col_btn, _ = st.columns([1, 3])
+    
+    with col_btn:
+        if st.button("💾 Guardar corte", type="primary", use_container_width=True):
+            if not colores_sel:
+                st.error("❌ Debe seleccionar al menos un color")
+            elif consumo_total <= 0:
+                st.error("❌ El consumo total debe ser mayor a 0")
+            elif prendas <= 0:
+                st.error("❌ La cantidad de prendas debe ser mayor a 0")
+            else:
+                insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
+                st.success("✅ Corte registrado y stock actualizado correctamente")
+                st.balloons()
 
     # -------------------------------
     # RESUMEN DE CORTES (VERSIÓN CORREGIDA)
@@ -938,6 +1001,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
