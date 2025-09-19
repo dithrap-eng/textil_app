@@ -239,9 +239,48 @@ elif menu == "📦 Stock":
         if filtro_color:
             df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
 
-        st.dataframe(df_filtrado, use_container_width=True)
+        # Filtrar filas con stock mayor a 0 O mostrar las de 0 con estilo diferente
+        df_con_stock = df_filtrado[df_filtrado["Rollos"] > 0]
+        df_sin_stock = df_filtrado[df_filtrado["Rollos"] == 0]
+
+        # Mostrar stock disponible con estilo normal
+        if not df_con_stock.empty:
+            st.subheader("✅ Stock Disponible")
+            st.dataframe(df_con_stock, use_container_width=True)
+        
+        # Mostrar stock agotado con estilo diferente (opcional)
+        if not df_sin_stock.empty:
+            st.subheader("❌ Stock Agotado")
+            
+            # Aplicar estilo CSS para filas con stock cero
+            def estilo_stock_cero(val):
+                if val == 0:
+                    return 'color: #999999; font-style: italic; text-decoration: line-through;'
+                return ''
+            
+            st.dataframe(
+                df_sin_stock.style.applymap(estilo_stock_cero, subset=['Rollos']),
+                use_container_width=True
+            )
 
         total_rollos = df_filtrado["Rollos"].sum()
+        
+        # Mostrar totales
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("📊 Total de rollos", total_rollos)
+        
+        with col2:
+            if filtro_tela and len(filtro_tela) == 1:
+                tela_seleccionada = filtro_tela[0]
+                df_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela_seleccionada]
+                if not df_tela.empty and df_tela["Rollos"].sum() > 0:
+                    # Aquí puedes calcular el precio promedio si tienes esa data
+                    st.metric("💰 Precio promedio x rollo", "USD -")
+                else:
+                    st.metric("💰 Precio promedio x rollo", "N/A")
         
         # Obtener el resumen de compras para calcular precios promedios
         df_compras = get_compras_resumen()
@@ -1001,6 +1040,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
