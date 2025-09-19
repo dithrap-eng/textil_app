@@ -491,7 +491,7 @@ elif menu == "✂ Cortes":
         
         # Mostrar columnas relevantes (usar nombres reales)
         columnas_a_mostrar = []
-        for col in ["Fecha", "Nro corte", "Artículo", "Tipo de tela"]:
+        for col in ["Fecha", "Nro Corte", "Artículo", "Tipo de tela"]:
             if col in df_mostrar_cortes.columns:
                 columnas_a_mostrar.append(col)
         
@@ -1024,6 +1024,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
