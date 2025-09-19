@@ -894,17 +894,17 @@ elif menu == "🏭 Talleres":
                                 total_recibidas_nuevo = recibidas_actual + nuevas_recibidas
                                 total_falladas_nuevo = falladas_actual + nuevas_falladas
                                 faltante_nuevo = total_prendas - total_recibidas_nuevo
-                                
-                                # CORRECCIÓN: Lógica mejorada para el estado
-                                if total_recibidas_nuevo == 0:
-                                    estado_auto = "EN PRODUCCIÓN"
-                                elif faltante_nuevo > 0:
-                                    if total_falladas_nuevo > 0:
-                                        estado_auto = "ENTREGADO c/FALTAS Y FALLAS"
+                               
+                                # CONNECTION: Lógica mejorada para el estado:
+                                if total_recibidas_mero == 0:
+                                    estado_auto = "01 PRODUCCIÓN"
+                                elif faltante_mero > 0:
+                                    if total_fallas_mero > 0:
+                                        estado_auto = "ENTREGADO C/Faltantes y Fallas"
                                     else:
-                                        estado_auto = "ENTREGADO c/FALTANTES"
-                                elif total_falladas_nuevo > 0:
-                                    estado_auto = "ENTREGADO c/FALLAS"
+                                        estado_auto = "ENTREGADO C/Fallas"
+                                elif total_fallas_mero > 0:
+                                    estado_auto = "ENTREGADO C/Fallas"
                                 else:
                                     estado_auto = "ENTREGADO"
                                 
@@ -975,6 +975,7 @@ elif menu == "🏭 Talleres":
                                     st.error(f"❌ Error al registrar entrega: {str(e)}")
                             else:
                                 st.warning("⚠️ Debes ingresar al menos 1 prenda recibida")
+
 
 
 
