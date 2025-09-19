@@ -466,49 +466,65 @@ elif menu == "🏭 Talleres":
         except:
             df_talleres = pd.DataFrame()
         
-        # SECTION 1: Asignar cortes a talleres
-        st.subheader("📤 Asignar corte a taller")
+# SECTION 1: Asignar cortes a talleres
+st.subheader("📤 Asignar corte a taller")
+
+cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
+
+if not cortes_sin_asignar.empty:
+    with st.form("form_asignar_taller"):
+        col1, col2 = st.columns(2)
+        with col1:
+            corte_seleccionado = st.selectbox(
+                "Seleccionar corte",
+                cortes_sin_asignar["Nro Corte"].unique()
+            )
+            taller = st.text_input("Nombre del taller")
+            fecha_envio = st.date_input("Fecha de envío", value=date.today())
         
-        cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
+        with col2:
+            info_corte = cortes_sin_asignar[cortes_sin_asignar["Nro Corte"] == corte_seleccionado].iloc[0]
+            st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
+            st.write(f"**Prendas totales:** {info_corte.get('Prendas', '')}")
+            st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
         
-        if not cortes_sin_asignar.empty:
-            with st.form("form_asignar_taller"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    # CORRECCIÓN: Usar "Nro Corte" en lugar de "Número de corte"
-                    corte_seleccionado = st.selectbox(
-                        "Seleccionar corte",
-                        cortes_sin_asignar["Nro Corte"].unique()
-                    )
-                    taller = st.text_input("Nombre del taller")
-                    fecha_envio = st.date_input("Fecha de envío", value=date.today())
-                
-                with col2:
-                    info_corte = cortes_sin_asignar[cortes_sin_asignar["Nro Corte"] == corte_seleccionado].iloc[0]
-                    st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
-                    st.write(f"**Prendas totales:** {info_corte.get('Prendas', '')}")  # CORRECCIÓN: "Prendas" en lugar de "Cantidad de prendas"
-                    st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
-                
-                # Botón de submit
-                submitted = st.form_submit_button("✅ Asignar a taller")
-                
-                if submitted:
-                    # Guardar asignación
-                    nuevo_registro = {
-                        "ID Corte": info_corte.get("ID", ""),
-                        "Nro Corte": corte_seleccionado,  # CORRECCIÓN: "Nro Corte"
-                        "Artículo": info_corte.get("Artículo", ""),
-                        "Taller": taller,
-                        "Fecha Envío": fecha_envio.strftime("%Y-%m-%d"),
-                        "Fecha Entrega": "",
-                        "Prendas Recibidas": 0,
-                        "Prendas Falladas": 0,
-                        "Estado": "EN PRODUCCIÓN",
-                        "Días Transcurridos": 0
-                    }
-                    ws_talleres.append_row(list(nuevo_registro.values()))
-                    st.success(f"Corte {corte_seleccionado} asignado a {taller}")
-                    st.rerun()
+        # Botón de submit
+        submitted = st.form_submit_button("✅ Asignar a taller")
+        
+        if submitted:
+            # CORRECCIÓN: Convertir todos los valores a tipos nativos de Python
+            id_corte = info_corte.get("ID", "")
+            # Asegurar que el ID sea un tipo nativo (no numpy)
+            if hasattr(id_corte, 'item'):
+                id_corte = id_corte.item()  # Para numpy types
+            elif hasattr(id_corte, 'tolist'):
+                id_corte = id_corte.tolist()  # Para pandas types
+            
+            # Guardar asignación
+            nuevo_registro = {
+                "ID Corte": str(id_corte),  # Convertir a string para asegurar
+                "Nro Corte": str(corte_seleccionado),
+                "Artículo": str(info_corte.get('Artículo', '')),
+                "Taller": str(taller),
+                "Fecha Envío": fecha_envio.strftime("%Y-%m-%d"),
+                "Fecha Entrega": "",
+                "Prendas Recibidas": 0,
+                "Prendas Falladas": 0,
+                "Estado": "EN PRODUCCIÓN",
+                "Días Transcurridos": 0
+            }
+            
+            # DEBUG: Mostrar el registro para verificar
+            st.write("Registro a guardar:", nuevo_registro)
+            
+            try:
+                ws_talleres.append_row(list(nuevo_registro.values()))
+                st.success(f"Corte {corte_seleccionado} asignado a {taller}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al guardar: {str(e)}")
+                st.write("Tipo de ID:", type(id_corte))
+                st.write("Valor de ID:", id_corte)
         
         # SECTION 2: Actualizar estados de talleres
         st.subheader("🔄 Actualizar estado de producción")
@@ -584,6 +600,7 @@ elif menu == "🏭 Talleres":
             st.dataframe(df_talleres, use_container_width=True)
     else:
         st.info("No hay cortes registrados para gestionar talleres.")
+
 
 
 
