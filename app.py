@@ -455,7 +455,7 @@ elif menu == "🏭 Talleres":
             # Crear worksheet si no existe
             spreadsheet.add_worksheet(title="Talleres", rows=100, cols=20)
             ws_talleres = spreadsheet.worksheet("Talleres")
-            ws_talleres.append_row(["ID Corte", "Número de Corte", "Artículo", "Taller", 
+            ws_talleres.append_row(["ID Corte", "Nro Corte", "Artículo", "Taller", 
                                   "Fecha Envío", "Fecha Entrega", "Prendas Recibidas", 
                                   "Prendas Falladas", "Estado", "Días Transcurridos"])
         
@@ -469,43 +469,34 @@ elif menu == "🏭 Talleres":
         # SECTION 1: Asignar cortes a talleres
         st.subheader("📤 Asignar corte a taller")
         
-        # CORRECCIÓN: Asegurar que el nombre de la variable sea consistente
         cortes_sin_asignar = df_cortes[~df_cortes["ID"].astype(str).isin(df_talleres["ID Corte"].astype(str))] if not df_talleres.empty else df_cortes
         
         if not cortes_sin_asignar.empty:
             with st.form("form_asignar_taller"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    # Verificar que la columna "Número de corte" existe en df_cortes
-                    if "Número de corte" in cortes_sin_asignar.columns:
-                        corte_seleccionado = st.selectbox(
-                            "Seleccionar corte",
-                            cortes_sin_asignar["Número de corte"].unique()
-                        )
-                    else:
-                        st.error("La columna 'Número de corte' no existe en los datos")
-                        corte_seleccionado = None
-                    
+                    # CORRECCIÓN: Usar "Nro Corte" en lugar de "Número de corte"
+                    corte_seleccionado = st.selectbox(
+                        "Seleccionar corte",
+                        cortes_sin_asignar["Nro Corte"].unique()
+                    )
                     taller = st.text_input("Nombre del taller")
                     fecha_envio = st.date_input("Fecha de envío", value=date.today())
                 
                 with col2:
-                    if corte_seleccionado is not None:
-                        info_corte = cortes_sin_asignar[cortes_sin_asignar["Número de corte"] == corte_seleccionado].iloc[0]
-                        st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
-                        st.write(f"**Prendas totales:** {info_corte.get('Cantidad de prendas', '')}")
-                        st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
-                    else:
-                        st.info("Selecciona un corte para ver la información")
+                    info_corte = cortes_sin_asignar[cortes_sin_asignar["Nro Corte"] == corte_seleccionado].iloc[0]
+                    st.write(f"**Artículo:** {info_corte.get('Artículo', '')}")
+                    st.write(f"**Prendas totales:** {info_corte.get('Prendas', '')}")  # CORRECCIÓN: "Prendas" en lugar de "Cantidad de prendas"
+                    st.write(f"**Tela:** {info_corte.get('Tipo de tela', '')}")
                 
-                # CORRECCIÓN: Botón de submit correctamente colocado
+                # Botón de submit
                 submitted = st.form_submit_button("✅ Asignar a taller")
                 
-                if submitted and corte_seleccionado is not None:
+                if submitted:
                     # Guardar asignación
                     nuevo_registro = {
                         "ID Corte": info_corte.get("ID", ""),
-                        "Número de Corte": corte_seleccionado,
+                        "Nro Corte": corte_seleccionado,  # CORRECCIÓN: "Nro Corte"
                         "Artículo": info_corte.get("Artículo", ""),
                         "Taller": taller,
                         "Fecha Envío": fecha_envio.strftime("%Y-%m-%d"),
@@ -518,9 +509,6 @@ elif menu == "🏭 Talleres":
                     ws_talleres.append_row(list(nuevo_registro.values()))
                     st.success(f"Corte {corte_seleccionado} asignado a {taller}")
                     st.rerun()
-                elif submitted:
-                    st.error("Por favor selecciona un corte válido")
-              
         
         # SECTION 2: Actualizar estados de talleres
         st.subheader("🔄 Actualizar estado de producción")
@@ -528,13 +516,16 @@ elif menu == "🏭 Talleres":
         if not df_talleres.empty:
             for _, taller_row in df_talleres.iterrows():
                 if taller_row.get("Estado") != "ENTREGADO":
-                    with st.expander(f"Corte {taller_row.get('Número de Corte', '')} - {taller_row.get('Taller', '')}"):
+                    with st.expander(f"Corte {taller_row.get('Nro Corte', '')} - {taller_row.get('Taller', '')}"):  # CORRECCIÓN: "Nro Corte"
+                        # Obtener información del corte original para los límites
+                        corte_original = df_cortes[df_cortes["ID"] == taller_row.get("ID Corte")].iloc[0] if not df_cortes.empty else None
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             prendas_recibidas = st.number_input(
                                 f"Prendas recibidas",
                                 min_value=0,
-                                max_value=int(info_corte.get('Cantidad de prendas', 1000)) if 'info_corte' in locals() else 1000,
+                                max_value=int(corte_original.get('Prendas', 1000)) if corte_original is not None else 1000,  # CORRECCIÓN: "Prendas"
                                 value=int(taller_row.get("Prendas Recibidas", 0)),
                                 key=f"recibidas_{taller_row.get('ID Corte', '')}"
                             )
@@ -575,7 +566,7 @@ elif menu == "🏭 Talleres":
             if not alertas.empty:
                 st.warning("⚠️ **Alertas - Más de 20 días en producción:**")
                 for _, alerta in alertas.iterrows():
-                    st.write(f"- Corte {alerta['Número de Corte']} en {alerta['Taller']}: {alerta['Días Transcurridos']} días")
+                    st.write(f"- Corte {alerta['Nro Corte']} en {alerta['Taller']}: {alerta['Días Transcurridos']} días")  # CORRECCIÓN: "Nro Corte"
             
             # Resumen por estado
             col1, col2, col3 = st.columns(3)
@@ -593,6 +584,7 @@ elif menu == "🏭 Talleres":
             st.dataframe(df_talleres, use_container_width=True)
     else:
         st.info("No hay cortes registrados para gestionar talleres.")
+
 
 
 
