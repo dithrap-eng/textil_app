@@ -498,7 +498,7 @@ elif menu == "🏭 Talleres":
                         try:
                             fecha_envio = pd.to_datetime(taller_row.get("Fecha Envío"))
                             dias_transcurridos = (date.today() - fecha_envio.date()).days
-                            fecha_envio_str = fecha_envio.strftime("%Y-%m-%d")
+                            fecha_envio_str = fecha_envio.strftime("%d-%m-%Y")
                         except:
                             dias_transcurridos = 0
                     
@@ -724,6 +724,7 @@ elif menu == "🏭 Talleres":
 
     else:
         st.info("📭 No hay cortes registrados para gestionar talleres")
+
 
 
 
