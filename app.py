@@ -973,53 +973,79 @@ elif menu == "🏭 Talleres":
             corte_seleccionado = None
         
         if corte_seleccionado:
-            # Obtener datos del corte seleccionado
-            corte_data = df_talleres[df_talleres["Número de Corte"] == corte_seleccionado].iloc[0]
-            corte_info = df_cortes[df_cortes["Número de Corte"] == corte_seleccionado].iloc[0] if not df_cortes.empty else None
-            
-            # Mostrar información del corte
-            col_info1, col_info2, col_info3 = st.columns(3)
-            
-            with col_info1:
-                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
-                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
-            
-            with col_info2:
-                st.metric("📏 Total Prendas", corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0))
-                st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
-            
-            with col_info3:
-                # Color según estado
-                estado = corte_data.get("Estado", "")
-                color = "🟡" if "PRODUCCIÓN" in estado else "🔴" if "FALTANTES" in estado or "FALLAS" in estado else "🔵"
-                st.metric("📊 Estado", f"{color} {estado}")
-                st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
-            
-            # --- HISTORIAL DE ENTREGAS ---
-            st.markdown("---")
-            st.subheader("📋 Historial de Entregas")
-            
-            historial_corte = df_historial[df_historial["Número de Corte"] == corte_seleccionado]
-            
-            if not historial_corte.empty:
-                # Calcular total acumulado y faltante
-                total_acumulado = historial_corte["Prendas Recibidas"].sum()
-                total_prendas = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
-                faltante = max(0, total_prendas - total_acumulado)
-                
-                # Mostrar historial
-                st.dataframe(
-                    historial_corte[["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]],
-                    use_container_width=True
-                )
-                
-                col_res1, col_res2 = st.columns(2)
-                with col_res1:
-                    st.metric("📦 Total Acumulado", total_acumulado)
-                with col_res2:
-                    st.metric("⚠️ Faltante", faltante)
+        # Obtener datos del corte seleccionado
+        try:
+            # En Talleres busca como "Nro Corte" o "Número de Corte"
+            if "Nro Corte" in df_talleres.columns:
+                corte_data = df_talleres[df_talleres["Nro Corte"] == corte_seleccionado].iloc[0]
+            elif "Número de Corte" in df_talleres.columns:
+                corte_data = df_talleres[df_talleres["Número de Corte"] == corte_seleccionado].iloc[0]
             else:
-                st.info("No hay entregas registradas para este corte")
+                st.error("❌ No se encuentra la columna del número de corte en Talleres")
+                st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
+                st.stop()
+        except IndexError:
+            st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
+            st.stop()
+        
+        # Obtener información del corte original
+        try:
+            if "Nro Corte" in df_cortes.columns:
+                corte_info = df_cortes[df_cortes["Nro Corte"] == corte_seleccionado].iloc[0]
+            else:
+                st.warning("⚠️ No se encontró información adicional del corte")
+                corte_info = None
+        except IndexError:
+            st.warning("⚠️ El corte no se encuentra en la solapa Cortes")
+            corte_info = None
+        
+        # Mostrar información del corte
+        col_info1, col_info2, col_info3 = st.columns(3)
+        
+        with col_info1:
+            st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
+            st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
+        
+        with col_info2:
+            # Usar Prendas de Cortes si está disponible, sino de Talleres
+            total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
+            st.metric("📏 Total Prendas", total_prendas_val)
+            st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
+        
+        with col_info3:
+            # Color según estado
+            estado = corte_data.get("Estado", "")
+            color = "🟡" if "PRODUCCIÓN" in estado else "🔴" if "FALTANTES" in estado or "FALLAS" in estado else "🔵"
+            st.metric("📊 Estado", f"{color} {estado}")
+            st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
+        
+        # --- HISTORIAL DE ENTREGAS ---
+        st.markdown("---")
+        st.subheader("📋 Historial de Entregas")
+        
+        # Buscar en Historial_Entregas por "Número de Corte"
+        historial_corte = df_historial[df_historial["Número de Corte"] == corte_seleccionado]
+        
+        if not historial_corte.empty:
+            # Calcular total acumulado y faltante
+            total_acumulado = historial_corte["Prendas Recibidas"].sum()
+            total_prendas = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
+            faltante = max(0, total_prendas - total_acumulado)
+            
+            # Mostrar historial
+            st.dataframe(
+                historial_corte[["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]],
+                use_container_width=True
+            )
+            
+            col_res1, col_res2 = st.columns(2)
+            with col_res1:
+                st.metric("📦 Total Acumulado", total_acumulado)
+            with col_res2:
+                st.metric("⚠️ Faltante", faltante)
+        else:
+            st.info("No hay entregas registradas para este corte")
+    
             
             # --- REGISTRAR NUEVA ENTREGA ---
             st.markdown("---")
@@ -1052,6 +1078,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
