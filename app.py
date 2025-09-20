@@ -1006,60 +1006,86 @@ elif menu == "🏭 Talleres":
                 font-size: 0.85rem;
                 font-weight: 500;
             }
-            .estado-produccion {
-                background-color: #4a8cff;
-                color: white;
-            }
             .estado-entregado {
                 background-color: #28a745;
                 color: white;
             }
-            .estado-otros {
+            .estado-entregado-fallas {
                 background-color: #ffc107;
                 color: #333;
             }
-            .inline-form-button {
-                display: flex;
-                justify-content: flex-end;
-                margin-top: 1.5rem;
+            .estado-pendiente {
+                background-color: #ffc107;
+                color: #333;
+            }
+            .estado-produccion {
+                background-color: #4a8cff;
+                color: white;
+            }
+            .section-box {
+                background-color: #262730;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+            .calculadora {
+                background-color: #1C1C25;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 10px 0;
             }
             </style>
             """, unsafe_allow_html=True)
             
-            # Mostrar información del corte (sin línea divisoria)
+            # Obtener valores actuales
+            total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
+            recibidas_actual = corte_data.get("Prendas Recibidas", 0)
+            falladas_actual = corte_data.get("Prendas Falladas", 0)
+            estado_actual = str(corte_data.get("Estado", ""))
+            
+            # Mostrar información del corte
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
             
             col_info1, col_info2, col_info3 = st.columns(3)
             
             with col_info1:
-                # Aplicar clase compacta a los metrics
                 st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
                 st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
                 st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info2:
-                # Usar Prendas de Cortes si está disponible, sino de Talleres
-                total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
                 st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
-                st.metric("📏 Total", total_prendas_val)
-                st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
+                st.metric("📏 Total Prendas", total_prendas_val)
+                st.metric("✅ Recibidas", recibidas_actual)
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info3:
                 st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
                 
-                # Determinar clase CSS según el estado
-                estado = str(corte_data.get("Estado", ""))
-                if "PRODUCCIÓN" in estado.upper() or "PRODUCCION" in estado.upper():
+                # Determinar estado actual con la lógica correcta
+                if recibidas_actual >= total_prendas_val:
+                    if falladas_actual > 0:
+                        estado_class = "estado-entregado-fallas"
+                        emoji = "🟡"
+                        estado = "ENTREGADO c/FALLAS"
+                    else:
+                        estado_class = "estado-entregado"
+                        emoji = "🟢"
+                        estado = "ENTREGADO"
+                elif "ARREGLOS" in estado_actual.upper():
+                    estado_class = "estado-pendiente"
+                    emoji = "🟡"
+                    estado = estado_actual
+                elif "FALTANTES" in estado_actual.upper():
+                    estado_class = "estado-pendiente"
+                    emoji = "🟡"
+                    estado = estado_actual
+                else:
                     estado_class = "estado-produccion"
                     emoji = "🔵"
-                elif "ENTREGADO" in estado.upper():
-                    estado_class = "estado-entregado"
-                    emoji = "🟢"
-                else:
-                    estado_class = "estado-otros"
-                    emoji = "🟡"
+                    estado = "EN PRODUCCIÓN"
                 
                 # Mostrar estado con badge personalizado
                 st.markdown(f"""
@@ -1069,12 +1095,11 @@ elif menu == "🏭 Talleres":
                 </div>
                 """, unsafe_allow_html=True)
                 
-                st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
+                st.metric("❌ Falladas", falladas_actual)
                 st.markdown('</div>', unsafe_allow_html=True)
             
             # --- OBTENER HISTORIAL PARA CÁLCULOS ---
             historial_corte = pd.DataFrame()
-            total_prendas = total_prendas_val  # Usamos el valor ya obtenido
             
             if not df_historial.empty:
                 # Intentar con diferentes nombres de columna
@@ -1088,70 +1113,131 @@ elif menu == "🏭 Talleres":
                         if not historial_corte.empty:
                             break
             
-            # Calcular total acumulado y faltante actual
-            total_acumulado_actual = historial_corte["Prendas Recibidas"].sum() if not historial_corte.empty and "Prendas Recibidas" in historial_corte.columns else 0
-            faltante_actual = max(0, total_prendas - total_acumulado_actual)
+            # Calcular totales actuales
+            faltante_actual = max(0, total_prendas_val - recibidas_actual)
             
             # --- REGISTRAR NUEVA ENTREGA ---
             st.markdown("---")
             st.subheader("📤 Registrar Nueva Entrega")
             
             with st.form(key=f"nueva_entrega_form_{corte_seleccionado}"):
+                st.markdown('<div class="section-box">', unsafe_allow_html=True)
+                
                 col_ent1, col_ent2 = st.columns(2)
                 
                 with col_ent1:
                     fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
-                    prendas_recibidas = st.number_input("Prendas Recibidas", min_value=0, value=0)
-                
-                with col_ent2:
                     # Calcular número de entrega
                     nro_entrega = len(historial_corte) + 1 if not historial_corte.empty else 1
                     st.info(f"**Entrega N°:** {nro_entrega}")
-                    prendas_falladas = st.number_input("Prendas Falladas", min_value=0, value=0)
                 
-                # Calcular nuevos totales
-                nuevo_total = total_acumulado_actual + prendas_recibidas
-                nuevo_faltante = max(0, total_prendas - nuevo_total)
+                with col_ent2:
+                    prendas_recibidas = st.number_input("Prendas Recibidas ✅", min_value=0, value=0, 
+                                                      help="Cantidad de prendas recibidas en buen estado")
                 
-                # Mostrar en la misma línea: Nuevo faltante, Total acumulado y Botón
-                col1, col2, col3 = st.columns([1, 1, 1])
+                col_ent3, col_ent4 = st.columns(2)
                 
-                with col1:
-                    st.metric("📦 Total Acumulado", nuevo_total)
+                with col_ent3:
+                    falladas_oferta = st.number_input("Fallado p/Oferta ❌", min_value=0, value=0,
+                                                   help="Prendas con fallas que se pueden vender como oferta")
                 
-                with col2:
-                    st.metric("⚠️ Faltante", nuevo_faltante)
+                with col_ent4:
+                    devolver_arreglar = st.number_input("Devolver p/Arreglar 🔄", min_value=0, value=0,
+                                                      help="Prendas que deben ser devueltas al taller para arreglo")
                 
-                with col3:
-                    st.markdown('<div class="inline-form-button">', unsafe_allow_html=True)
-                    submitted = st.form_submit_button("📝 Registrar Entrega", use_container_width=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                # Calcular faltantes automáticamente
+                total_entrega_actual = prendas_recibidas + falladas_oferta + devolver_arreglar
+                faltantes = max(0, total_prendas_val - (recibidas_actual + total_entrega_actual))
+                
+                # Mostrar cálculos
+                st.markdown('<div class="calculadora">', unsafe_allow_html=True)
+                st.markdown("**🧮 Resumen de la entrega:**")
+                st.markdown(f"• Prendas recibidas: **{prendas_recibidas}**")
+                st.markdown(f"• Fallado p/Oferta: **{falladas_oferta}**")
+                st.markdown(f"• Devolver p/Arreglar: **{devolver_arreglar}**")
+                st.markdown(f"• **Total de esta entrega: {total_entrega_actual}**")
+                st.markdown(f"• **Faltantes después de esta entrega: {faltantes}**")
+                
+                # Verificar si la suma coincide con el total del corte
+                suma_actual = recibidas_actual + total_entrega_actual
+                if suma_actual == total_prendas_val:
+                    st.success("✅ La suma coincide con el total del corte")
+                elif suma_actual > total_prendas_val:
+                    st.error(f"❌ La suma ({suma_actual}) supera el total del corte ({total_prendas_val})")
+                else:
+                    st.warning(f"⚠️ Faltan {total_prendas_val - suma_actual} prendas para completar el corte")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Determinar el nuevo estado basado en los valores ingresados
+                nuevas_recibidas = recibidas_actual + prendas_recibidas
+                nuevas_falladas = falladas_actual + falladas_oferta
+                
+                if nuevas_recibidas + nuevas_falladas >= total_prendas_val:
+                    if nuevas_falladas > 0:
+                        nuevo_estado = "ENTREGADO c/FALLAS OFERTA"
+                    else:
+                        nuevo_estado = "ENTREGADO"
+                elif devolver_arreglar > 0:
+                    nuevo_estado = "ENTREGADO c/ARREGLOS"
+                elif faltantes > 0:
+                    nuevo_estado = "ENTREGADO c/FALTANTES"
+                else:
+                    nuevo_estado = "EN PRODUCCIÓN"
+                
+                st.info(f"**Nuevo estado después de esta entrega:** {nuevo_estado}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Botón de registro
+                submitted = st.form_submit_button("📝 Registrar Entrega", use_container_width=True)
                 
                 if submitted:
-                    # Aquí iría la lógica para guardar en Historial_Entregas
-                    # y actualizar Talleres con los nuevos totales
-                    st.success("Entrega registrada exitosamente")
-                    st.rerun()
+                    # Validar que la suma no supere el total
+                    if (recibidas_actual + prendas_recibidas + falladas_oferta + devolver_arreglar) > total_prendas_val:
+                        st.error("❌ La suma de las prendas recibidas supera el total del corte. Verifique los valores.")
+                    else:
+                        # Aquí iría la lógica para guardar en Historial_Entregas
+                        # y actualizar Talleres con los nuevos totales
+                        st.success(f"✅ Entrega registrada exitosamente. Nuevo estado: {nuevo_estado}")
+                        # Recargar la página para actualizar los datos
+                        st.rerun()
             
-            # --- HISTORIAL DE ENTREGAS (AL FINAL) ---
+            # --- HISTORIAL DE ENTREGAS ---
             st.markdown("---")
             st.subheader("📋 Historial de Entregas")
             
             if not historial_corte.empty:
                 # Mostrar historial con las columnas disponibles
                 columnas_a_mostrar = []
-                for col in ["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]:
+                columnas_deseadas = ["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Fallado p/Oferta", 
+                                   "Devolver p/Arreglar", "Faltantes", "Estado"]
+                
+                for col in columnas_deseadas:
                     if col in historial_corte.columns:
                         columnas_a_mostrar.append(col)
                 
                 if columnas_a_mostrar:
                     st.dataframe(
                         historial_corte[columnas_a_mostrar].sort_values("Fecha Entrega", ascending=False),
-                        use_container_width=True
+                        use_container_width=True,
+                        height=300
                     )
+                    
+                    # Mostrar totales del historial
+                    st.markdown("**📊 Totales del historial:**")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Recibidas", historial_corte["Prendas Recibidas"].sum())
+                    with col2:
+                        st.metric("Total Fallas Oferta", historial_corte["Fallado p/Oferta"].sum() if "Fallado p/Oferta" in historial_corte.columns else 0)
+                    with col3:
+                        st.metric("Total p/Arreglar", historial_corte["Devolver p/Arreglar"].sum() if "Devolver p/Arreglar" in historial_corte.columns else 0)
+                    with col4:
+                        st.metric("Total Faltantes", historial_corte["Faltantes"].sum() if "Faltantes" in historial_corte.columns else 0)
                 else:
                     st.warning("No se encontraron las columnas esperadas en el historial")
-                    st.write("Datos disponibles:", historial_corte.columns.tolist())
+                    st.write("Columnas disponibles:", historial_corte.columns.tolist())
             else:
                 st.info("No hay entregas registradas para este corte")
 
