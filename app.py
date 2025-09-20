@@ -609,7 +609,7 @@ elif menu == "🏭 Talleres":
         </style>
     """, unsafe_allow_html=True)
     
-    st.header("📋 Tablero de Producción - Sistema Kanban")
+    st.header("📋 Tablero de Producción - Talleres")
     
     # Obtener datos
     df_cortes = get_cortes_resumen()
@@ -1024,6 +1024,7 @@ elif menu == "🏭 Talleres":
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error al guardar: {str(e)}")
+
 
 
 
