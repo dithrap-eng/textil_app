@@ -972,9 +972,9 @@ elif menu == "🏭 Talleres":
             st.info("No hay cortes pendientes para gestionar")
             corte_seleccionado = None
         
-            if corte_seleccionado:
-            # Obtener datos del corte seleccionado
-                try:
+        if corte_seleccionado:
+        # Obtener datos del corte seleccionado
+            try:
                 # En Talleres busca como "Nro Corte" o "Número de Corte"
                 if "Nro Corte" in df_talleres.columns:
                     corte_data = df_talleres[df_talleres["Nro Corte"] == corte_seleccionado].iloc[0]
@@ -984,17 +984,17 @@ elif menu == "🏭 Talleres":
                     st.error("❌ No se encuentra la columna del número de corte en Talleres")
                     st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
                     st.stop()
-                except IndexError:
+                 except IndexError:
                     st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
                     st.stop()
                 
-                # Obtener información del corte original
-                try:
-                    if "Nro Corte" in df_cortes.columns:
-                        corte_info = df_cortes[df_cortes["Nro Corte"] == corte_seleccionado].iloc[0]
-                    else:
-                        st.warning("⚠️ No se encontró información adicional del corte")
-                        corte_info = None
+        # Obtener información del corte original
+            try:
+                if "Nro Corte" in df_cortes.columns:
+                    corte_info = df_cortes[df_cortes["Nro Corte"] == corte_seleccionado].iloc[0]
+                else:
+                    st.warning("⚠️ No se encontró información adicional del corte")
+                    corte_info = None
                 except IndexError:
                     st.warning("⚠️ El corte no se encuentra en la solapa Cortes")
                     corte_info = None
@@ -1078,6 +1078,7 @@ elif menu == "🏭 Talleres":
                             # y actualizar Talleres con los nuevos totales
                             st.success("Entrega registrada exitosamente")
                             st.rerun()
+
 
 
 
