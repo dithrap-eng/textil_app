@@ -933,9 +933,11 @@ elif menu == "🏭 Talleres":
             # Crear lista de cortes para el dropdown
             opciones_cortes = []
             for _, corte in cortes_pendientes.iterrows():
-                nro_corte = corte.get("Nro Corte", corte.get("Número de Corte", "Desconocido"))
+                # Obtener el número de corte correctamente
+                nro_corte = corte.get("Número de Corte", "Desconocido")
                 articulo = corte.get("Artículo", "Sin nombre")
-                opciones_cortes.append(f"{nro_corte} - {articulo}")
+                # Convertir a string para evitar problemas
+                opciones_cortes.append(f"{str(nro_corte)} - {articulo}")
             
             corte_seleccionado_str = st.selectbox(
                 "Seleccionar Corte para Gestionar Entregas",
@@ -951,41 +953,39 @@ elif menu == "🏭 Talleres":
         
         # --- GESTIÓN DE ENTREGA PARCIAL ---
         if corte_seleccionado:
+            # Convertir a número para buscar
+            try:
+                numero_corte = int(corte_seleccionado)
+            except ValueError:
+                numero_corte = corte_seleccionado  # Mantener como string si no es número
+            
             # Obtener datos del corte seleccionado
             try:
-                # Buscar en Talleres por diferentes nombres de columna
-                if "Nro Corte" in df_talleres.columns:
-                    corte_data = df_talleres[df_talleres["Nro Corte"] == corte_seleccionado].iloc[0]
-                elif "Número de Corte" in df_talleres.columns:
-                    corte_data = df_talleres[df_talleres["Número de Corte"] == corte_seleccionado].iloc[0]
+                # Buscar en Talleres - convertir ambos a string para comparar
+                if "Número de Corte" in df_talleres.columns:
+                    # Convertir la columna a string para comparar
+                    df_talleres["Número de Corte_str"] = df_talleres["Número de Corte"].astype(str)
+                    corte_data = df_talleres[df_talleres["Número de Corte_str"] == str(corte_seleccionado)].iloc[0]
                 else:
-                    # Si no encuentra, buscar en cualquier columna que contenga el número
-                    for col in df_talleres.columns:
-                        if corte_seleccionado in df_talleres[col].astype(str).values:
-                            corte_data = df_talleres[df_talleres[col] == corte_seleccionado].iloc[0]
-                            break
-                    else:
-                        st.error("❌ No se pudo encontrar el corte en Talleres")
-                        st.stop()
-            except (IndexError, KeyError):
+                    st.error("❌ No se encuentra la columna 'Número de Corte' en Talleres")
+                    st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
+                    st.stop()
+            except IndexError:
                 st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
+                st.write("Cortes disponibles en Talleres:", df_talleres["Número de Corte"].unique() if "Número de Corte" in df_talleres.columns else "No hay columna 'Número de Corte'")
                 st.stop()
             
             # Obtener información del corte original de la solapa Cortes
             try:
                 if "Nro Corte" in df_cortes.columns:
-                    corte_info = df_cortes[df_cortes["Nro Corte"] == corte_seleccionado].iloc[0]
+                    # Convertir a string para comparar
+                    df_cortes["Nro Corte_str"] = df_cortes["Nro Corte"].astype(str)
+                    corte_info = df_cortes[df_cortes["Nro Corte_str"] == str(corte_seleccionado)].iloc[0]
                 else:
-                    # Buscar en otras columnas posibles
-                    for col in df_cortes.columns:
-                        if corte_seleccionado in df_cortes[col].astype(str).values:
-                            corte_info = df_cortes[df_cortes[col] == corte_seleccionado].iloc[0]
-                            break
-                    else:
-                        corte_info = None
+                    corte_info = None
             except (IndexError, KeyError):
                 corte_info = None
-            
+               
             # Mostrar información del corte
             st.markdown("---")
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
@@ -1067,6 +1067,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
