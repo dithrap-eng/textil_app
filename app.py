@@ -973,7 +973,7 @@ elif menu == "🏭 Talleres":
             corte_seleccionado = None
         
         if corte_seleccionado:
-        # Obtener datos del corte seleccionado
+            # Obtener datos del corte seleccionado
             try:
                 # En Talleres busca como "Nro Corte" o "Número de Corte"
                 if "Nro Corte" in df_talleres.columns:
@@ -984,20 +984,20 @@ elif menu == "🏭 Talleres":
                     st.error("❌ No se encuentra la columna del número de corte en Talleres")
                     st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
                     st.stop()
-                 except IndexError:
-                    st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
-                    st.stop()
-                
-        # Obtener información del corte original
+            except IndexError:
+                st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
+                st.stop()
+            
+            # Obtener información del corte original
             try:
                 if "Nro Corte" in df_cortes.columns:
                     corte_info = df_cortes[df_cortes["Nro Corte"] == corte_seleccionado].iloc[0]
                 else:
                     st.warning("⚠️ No se encontró información adicional del corte")
                     corte_info = None
-                except IndexError:
-                    st.warning("⚠️ El corte no se encuentra en la solapa Cortes")
-                    corte_info = None
+            except IndexError:
+                st.warning("⚠️ El corte no se encuentra en la solapa Cortes")
+                corte_info = None
                 
                 # Mostrar información del corte
                 col_info1, col_info2, col_info3 = st.columns(3)
@@ -1078,6 +1078,7 @@ elif menu == "🏭 Talleres":
                             # y actualizar Talleres con los nuevos totales
                             st.success("Entrega registrada exitosamente")
                             st.rerun()
+
 
 
 
