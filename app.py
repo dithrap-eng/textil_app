@@ -917,29 +917,27 @@ elif menu == "🏭 Talleres":
                 st.markdown('</div>', unsafe_allow_html=True)
         
         # ==============================================
-        # 📦 SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES
+        # 📦 SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES (SIMPLIFICADO)
         # ==============================================
         st.markdown("---")
-        st.subheader("📦 Sistema de Entregas Parciales")
+        st.subheader("📦 Sistema de Entregas")
         
-        # Filtrar cortes que NO estén completos (no "ENTREGADO")
+        # Filtrar cortes que están EN PRODUCCIÓN
         if not df_talleres.empty and "Estado" in df_talleres.columns:
-            cortes_pendientes = df_talleres[df_talleres["Estado"] != "ENTREGADO"]
+            cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
         else:
-            cortes_pendientes = pd.DataFrame()
+            cortes_produccion = pd.DataFrame()
         
-        # --- SELECCIÓN SIMPLE CON DESPLEGABLE ---
-        if not cortes_pendientes.empty:
+        # --- SELECCIÓN DE CORTE ---
+        if not cortes_produccion.empty:
             # Crear lista de cortes para el dropdown
             opciones_cortes = []
-            for _, corte in cortes_pendientes.iterrows():
-                # Obtener el número de corte correctamente
+            for _, corte in cortes_produccion.iterrows():
                 nro_corte = corte.get("Número de Corte", "Desconocido")
                 articulo = corte.get("Artículo", "Sin nombre")
-                # Convertir a string para evitar problemas
                 opciones_cortes.append(f"{str(nro_corte)} - {articulo}")
             
-            # Aplicar estilo al selectbox
+            # Estilo para el selectbox
             st.markdown("""
             <style>
             .corte-select label {
@@ -951,70 +949,6 @@ elif menu == "🏭 Talleres":
                 border: 2px solid #007bff !important;
                 border-radius: 5px !important;
             }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown('<div class="corte-select">', unsafe_allow_html=True)
-            corte_seleccionado_str = st.selectbox(
-                "Seleccionar Corte para Gestionar Entregas",
-                options=opciones_cortes,
-                index=0
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Extraer solo el número de corte del string seleccionado
-            corte_seleccionado = corte_seleccionado_str.split(" - ")[0]
-        else:
-            st.info("No hay cortes pendientes para gestionar")
-            corte_seleccionado = None
-        
-        # --- GESTIÓN DE ENTREGA PARCIAL ---
-        if corte_seleccionado:
-            # Obtener datos del corte seleccionado de Talleres
-            try:
-                # Buscar en Talleres
-                corte_data = None
-                if "Número de Corte" in df_talleres.columns:
-                    # Filtrar el dataframe para encontrar el corte
-                    corte_filtrado = df_talleres[df_talleres["Número de Corte"].astype(str) == str(corte_seleccionado)]
-                    if not corte_filtrado.empty:
-                        corte_data = corte_filtrado.iloc[0]
-                    else:
-                        st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
-                        st.stop()
-                else:
-                    st.error("❌ No se encuentra la columna 'Número de Corte' en Talleres")
-                    st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
-                    st.stop()
-            except Exception as e:
-                st.error(f"❌ Error al buscar el corte: {str(e)}")
-                st.stop()
-            
-            # Obtener información del corte original de la solapa Cortes
-            try:
-                corte_info = None
-                if "Nro Corte" in df_cortes.columns:
-                    # Filtrar el dataframe para encontrar el corte
-                    corte_filtrado_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(corte_seleccionado)]
-                    if not corte_filtrado_cortes.empty:
-                        corte_info = corte_filtrado_cortes.iloc[0]
-            except Exception as e:
-                st.warning(f"⚠️ No se pudo obtener información adicional del corte: {str(e)}")
-                corte_info = None
-                
-            # Aplicar CSS personalizado para esta sección
-            st.markdown("""
-            <style>
-            .compact-metric .stMetric {
-                margin-bottom: 0.5rem;
-            }
-            .compact-metric .stMetric label {
-                font-size: 0.9rem !important;
-                color: #a0a0a0 !important;
-            }
-            .compact-metric .stMetric value {
-                font-size: 0.9rem !important;
-            }
             .estado-badge {
                 display: inline-block;
                 padding: 4px 10px;
@@ -1022,47 +956,54 @@ elif menu == "🏭 Talleres":
                 font-size: 0.85rem;
                 font-weight: 500;
             }
-            .estado-entregado {
-                background-color: #28a745;
-                color: white;
-            }
-            .estado-entregado-fallas {
-                background-color: #ffc107;
-                color: #333;
-            }
-            .estado-pendiente {
-                background-color: #ffc107;
-                color: #333;
-            }
             .estado-produccion {
                 background-color: #4a8cff;
                 color: white;
             }
-            .prendas-recibidas input {
-                background-color: #e6f7ff !important;
-                font-weight: bold !important;
-                border: 2px solid #007bff !important;
+            .estado-entregado {
+                background-color: #28a745;
+                color: white;
             }
-            .btn-registrar {
-                background-color: #28a745 !important;
-                color: white !important;
-                font-weight: bold !important;
-                border: none !important;
-                padding: 10px 20px !important;
-                border-radius: 5px !important;
+            .estado-faltantes {
+                background-color: #ffc107;
+                color: #333;
             }
-            .btn-registrar:hover {
-                background-color: #218838 !important;
-            }
-            .resumen-entrega {
-                background-color: #f8f9fa;
-                border-radius: 5px;
-                padding: 10px;
-                margin: 10px 0;
-                border-left: 4px solid #007bff;
+            .estado-fallas {
+                background-color: #dc3545;
+                color: white;
             }
             </style>
             """, unsafe_allow_html=True)
+            
+            st.markdown('<div class="corte-select">', unsafe_allow_html=True)
+            corte_seleccionado_str = st.selectbox(
+                "Seleccionar Corte para Registrar Entrega",
+                options=opciones_cortes,
+                index=0
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Extraer solo el número de corte
+            corte_seleccionado = corte_seleccionado_str.split(" - ")[0]
+        else:
+            st.info("No hay cortes en producción para gestionar")
+            corte_seleccionado = None
+        
+        # --- INFORMACIÓN DEL CORTE SELECCIONADO ---
+        if corte_seleccionado:
+            # Obtener datos del corte seleccionado
+            try:
+                corte_data = None
+                if "Número de Corte" in df_talleres.columns:
+                    corte_filtrado = df_talleres[df_talleres["Número de Corte"].astype(str) == str(corte_seleccionado)]
+                    if not corte_filtrado.empty:
+                        corte_data = corte_filtrado.iloc[0]
+                    else:
+                        st.error(f"❌ No se encontró el corte {corte_seleccionado}")
+                        st.stop()
+            except Exception as e:
+                st.error(f"❌ Error al buscar el corte: {str(e)}")
+                st.stop()
             
             # Mostrar información del corte
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
@@ -1070,143 +1011,200 @@ elif menu == "🏭 Talleres":
             col_info1, col_info2, col_info3 = st.columns(3)
             
             with col_info1:
-                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
-                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A") if corte_data is not None else "N/A")
-                st.metric("🏭 Taller", corte_data.get("Taller", "N/A") if corte_data is not None else "N/A")
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
+                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
             
             with col_info2:
-                # Usar Prendas de Cortes si está disponible, sino de Talleres
-                if corte_info is not None:
-                    total_prendas_val = corte_info.get("Prendas", 0)
-                elif corte_data is not None:
-                    total_prendas_val = corte_data.get("Prendas", 0)
-                else:
-                    total_prendas_val = 0
-                    
-                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
-                st.metric("📏 Total Prendas", total_prendas_val)
-                
-                recibidas_actual = corte_data.get("Prendas Recibidas", 0) if corte_data is not None else 0
+                total_prendas = corte_data.get("Prendas", 0)
+                st.metric("📏 Total Prendas", total_prendas)
+                recibidas_actual = corte_data.get("Prendas Recibidas", 0)
                 st.metric("✅ Recibidas", recibidas_actual)
-                st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info3:
-                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
-                
-                # Determinar estado actual
-                estado_actual = corte_data.get("Estado", "") if corte_data is not None else ""
-                falladas_actual = corte_data.get("Prendas Falladas", 0) if corte_data is not None else 0
-                
-                if recibidas_actual >= total_prendas_val:
-                    if falladas_actual > 0:
-                        estado_class = "estado-entregado-fallas"
-                        emoji = "🟡"
-                        estado = "ENTREGADO c/FALLAS"
-                    else:
-                        estado_class = "estado-entregado"
-                        emoji = "🟢"
-                        estado = "ENTREGADO"
-                elif recibidas_actual > 0:
-                    estado_class = "estado-produccion"
-                    emoji = "🔵"
-                    estado = "EN PRODUCCIÓN"
-                else:
-                    estado_class = "estado-pendiente"
-                    emoji = "🟡"
-                    estado = estado_actual if estado_actual else "PENDIENTE"
-                
+                # Estado actual (siempre azul para cortes en producción)
                 st.markdown(f"""
-                <div style="margin-bottom: 0.5rem;">
+                <div style="margin-bottom: 1rem;">
                     <div style="font-size: 0.9rem; color: #a0a0a0; margin-bottom: 0.2rem;">📊 Estado</div>
-                    <span class="estado-badge {estado_class}">{emoji} {estado}</span>
+                    <span class="estado-badge estado-produccion">🔵 EN PRODUCCIÓN</span>
                 </div>
                 """, unsafe_allow_html=True)
                 
+                falladas_actual = corte_data.get("Prendas Falladas", 0)
                 st.metric("❌ Falladas", falladas_actual)
-                st.markdown('</div>', unsafe_allow_html=True)
             
-            # --- REGISTRAR NUEVA ENTREGA ---
+            # --- REGISTRAR ENTREGA ---
             st.markdown("---")
-            st.subheader("📤 Registrar Nueva Entrega")
+            st.subheader("📤 Registrar Entrega")
             
-            with st.form(key=f"nueva_entrega_form_{corte_seleccionado}"):
-                col_ent1, col_ent2 = st.columns(2)
+            with st.form(key=f"entrega_form_{corte_seleccionado}"):
+                col1, col2 = st.columns(2)
                 
-                with col_ent1:
-                    # Número de entrega primero
-                    nro_entrega = 1  # Por defecto, podrías calcularlo basado en el historial
-                    st.info(f"**Entrega N°:** {nro_entrega}")
+                with col1:
                     fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
                 
-                with col_ent2:
+                with col2:
+                    # Campo destacado para prendas recibidas
+                    st.markdown("""
+                    <style>
+                    .prendas-recibidas input {
+                        background-color: #e6f7ff !important;
+                        font-weight: bold !important;
+                        border: 2px solid #007bff !important;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
                     st.markdown('<div class="prendas-recibidas">', unsafe_allow_html=True)
-                    prendas_recibidas = st.number_input("Prendas Recibidas ✅", min_value=0, value=0, 
-                                                      key="prendas_recibidas_input")
+                    prendas_recibidas = st.number_input("Prendas Recibidas ✅", 
+                                                      min_value=0, 
+                                                      max_value=total_prendas,
+                                                      value=0)
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                col_ent3, col_ent4 = st.columns(2)
+                # Calcular faltante automáticamente
+                faltante = max(0, total_prendas - prendas_recibidas)
                 
-                with col_ent3:
-                    falladas_oferta = st.number_input("Fallado p/Oferta ❌", min_value=0, value=0,
-                                                   key="falladas_oferta_input")
+                # Mostrar resultado del cálculo
+                st.info(f"**🧮 Faltante después de esta entrega: {faltante} prendas**")
                 
-                with col_ent4:
-                    devolver_arreglar = st.number_input("Devolver p/Arreglar 🔄", min_value=0, value=0,
-                                                      key="devolver_arreglar_input")
+                # Determinar nuevo estado
+                if faltante == 0:
+                    nuevo_estado = "ENTREGADO"
+                    st.success("✅ El corte se marcará como ENTREGADO")
+                else:
+                    nuevo_estado = "ENTREGADO c/FALTANTES"
+                    st.warning(f"⚠️ El corte quedará como ENTREGADO c/FALTANTES ({faltante} faltantes)")
                 
-                # --- RESUMEN EN TIEMPO REAL ---
-                # Calcular valores en tiempo real
-                total_entrega_actual = prendas_recibidas + falladas_oferta + devolver_arreglar
-                nuevas_recibidas = recibidas_actual + prendas_recibidas
-                faltantes = max(0, total_prendas_val - (recibidas_actual + total_entrega_actual))
+                # Campo para fallas (solo visible si el corte se marca como ENTREGADO)
+                if faltante == 0:
+                    fallas_detectadas = st.number_input("Prendas Falladas Detectadas ❌", 
+                                                       min_value=0, 
+                                                       max_value=prendas_recibidas,
+                                                       value=0,
+                                                       help="Cantidad de prendas con fallas detectadas en el control de calidad")
                 
-                # Mostrar resumen compacto
-                st.markdown(f"""
-                <div class="resumen-entrega">
-                    <h4>🧮 Resumen de la Entrega</h4>
-                    <p><strong>Total de esta entrega:</strong> {total_entrega_actual} prendas</p>
-                    <p><strong>Nuevo total recibido:</strong> {nuevas_recibidas} / {total_prendas_val}</p>
-                    <p><strong>Faltantes después de esta entrega:</strong> {faltantes}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Botón de registro destacado
-                submitted = st.form_submit_button("📝 REGISTRAR ENTREGA", 
-                                                 use_container_width=True,
-                                                 type="primary")
+                # Botón de registro
+                submitted = st.form_submit_button("📝 REGISTRAR ENTREGA", use_container_width=True, type="primary")
                 
                 if submitted:
-                    st.success("✅ Entrega registrada exitosamente")
-                    # Aquí iría la lógica para guardar en Google Sheets
-                    # (necesitarás implementar la conexión con tu API de Google Sheets)
-            
-            # --- HISTORIAL DE ENTREGAS ---
-            st.markdown("---")
-            st.subheader("📋 Historial de Entregas")
-            
-            # Intenta cargar el historial para este corte
-            try:
-                historial_corte = pd.DataFrame()
-                if not df_historial.empty and "Número de Corte" in df_historial.columns:
-                    historial_corte = df_historial[df_historial["Número de Corte"].astype(str) == str(corte_seleccionado)]
+                    # Aquí iría la lógica para actualizar Google Sheets
+                    st.success(f"✅ Entrega registrada. Nuevo estado: {nuevo_estado}")
+                    # Recargar para ver cambios
+                    st.rerun()
+        
+        # ==============================================
+        # 📋 SECCIÓN 4: SEGUIMIENTO DE FALTANTES
+        # ==============================================
+        st.markdown("---")
+        st.subheader("📋 Seguimiento de Cortes con Faltantes")
+        
+        # Filtrar cortes con faltantes
+        if not df_talleres.empty and "Estado" in df_talleres.columns:
+            cortes_faltantes = df_talleres[df_talleres["Estado"] == "ENTREGADO c/FALTANTES"]
+        else:
+            cortes_faltantes = pd.DataFrame()
+        
+        if not cortes_faltantes.empty:
+            # Crear tabla de seguimiento
+            datos_seguimiento = []
+            for _, corte in cortes_faltantes.iterrows():
+                nro_corte = corte.get("Número de Corte", "")
+                articulo = corte.get("Artículo", "")
+                taller = corte.get("Taller", "")
+                fecha_entrega = corte.get("Fecha Entrega", "")
+                total_prendas = corte.get("Prendas", 0)
+                recibidas = corte.get("Prendas Recibidas", 0)
+                faltantes = max(0, total_prendas - recibidas)
                 
-                if not historial_corte.empty:
-                    columnas_mostrar = ["Fecha Entrega", "Entrega N°", "Prendas Recibidas", 
-                                      "Fallado p/Oferta", "Devolver p/Arreglar", "Faltantes", "Estado"]
+                datos_seguimiento.append({
+                    "N° Corte": nro_corte,
+                    "Artículo": articulo,
+                    "Taller": taller,
+                    "Fecha Entrega": fecha_entrega,
+                    "Faltantes": faltantes
+                })
+            
+            df_seguimiento = pd.DataFrame(datos_seguimiento)
+            st.dataframe(df_seguimiento, use_container_width=True)
+            
+            # Seleccionar corte para completar faltantes
+            cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
+                             for _, row in df_seguimiento.iterrows()]
+            
+            corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
+            
+            if corte_completar:
+                corte_id = corte_completar.split(" - ")[0]
+                st.info(f"Completando faltantes para el corte {corte_id}")
+                
+                if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
+                    st.success(f"Corte {corte_id} marcado como ENTREGADO")
+                    # Aquí iría la lógica para actualizar el estado en Google Sheets
+        else:
+            st.info("No hay cortes con faltantes pendientes")
+        
+        # ==============================================
+        # 🔄 SECCIÓN 5: SISTEMA DE DEVOLUCIONES
+        # ==============================================
+        st.markdown("---")
+        st.subheader("🔄 Sistema de Devoluciones")
+        
+        # Filtrar cortes entregados que pueden tener devoluciones
+        if not df_talleres.empty and "Estado" in df_talleres.columns:
+            cortes_entregados = df_talleres[
+                (df_talleres["Estado"] == "ENTREGADO") | 
+                (df_talleres["Estado"] == "ENTREGADO c/FALTANTES")
+            ]
+        else:
+            cortes_entregados = pd.DataFrame()
+        
+        if not cortes_entregados.empty:
+            # Seleccionar corte para devolución
+            opciones_devolucion = []
+            for _, corte in cortes_entregados.iterrows():
+                nro_corte = corte.get("Número de Corte", "Desconocido")
+                articulo = corte.get("Artículo", "Sin nombre")
+                opciones_devolucion.append(f"{str(nro_corte)} - {articulo}")
+            
+            corte_devolucion_str = st.selectbox(
+                "Seleccionar Corte para Devolución",
+                options=opciones_devolucion
+            )
+            
+            if corte_devolucion_str:
+                corte_devolucion_id = corte_devolucion_str.split(" - ")[0]
+                
+                # Obtener datos del corte seleccionado
+                corte_dev_data = df_talleres[
+                    df_talleres["Número de Corte"].astype(str) == str(corte_devolucion_id)
+                ].iloc[0]
+                
+                recibidas_dev = corte_dev_data.get("Prendas Recibidas", 0)
+                
+                with st.form(key=f"devolucion_form_{corte_devolucion_id}"):
+                    st.write(f"**Corte:** {corte_devolucion_id} - {corte_dev_data.get('Artículo', '')}")
+                    st.write(f"**Prendas recibidas:** {recibidas_dev}")
                     
-                    # Filtrar columnas existentes
-                    columnas_existentes = [col for col in columnas_mostrar if col in historial_corte.columns]
+                    col_dev1, col_dev2 = st.columns(2)
                     
-                    st.dataframe(
-                        historial_corte[columnas_existentes].sort_values("Fecha Entrega", ascending=False),
-                        use_container_width=True,
-                        height=300
-                    )
-                else:
-                    st.info("No hay entregas registradas para este corte")
-            except Exception as e:
-                st.error(f"Error al cargar el historial: {str(e)}")
+                    with col_dev1:
+                        fecha_devolucion = st.date_input("Fecha de Devolución", value=date.today())
+                    
+                    with col_dev2:
+                        prendas_devolver = st.number_input("Prendas a Devolver", 
+                                                          min_value=1, 
+                                                          max_value=recibidas_dev,
+                                                          value=1)
+                    
+                    observaciones = st.text_area("Observaciones/Motivo de la devolución")
+                    
+                    submitted_dev = st.form_submit_button("📦 REGISTRAR DEVOLUCIÓN", type="primary")
+                    
+                    if submitted_dev:
+                        # Aquí iría la lógica para registrar la devolución
+                        st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
+                        st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
+        else:
+            st.info("No hay cortes entregados disponibles para devolución")
 
 
 
