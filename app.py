@@ -5,6 +5,127 @@ from google.oauth2.service_account import Credentials
 from datetime import date
 import numpy as np 
 
+# Configuración de la página (debe ser lo primero)
+st.set_page_config(page_title="Sistema Textil", layout="wide")
+
+# Aplicar CSS personalizado para modo oscuro
+st.markdown("""
+<style>
+    /* Modo oscuro para la aplicación */
+    .stApp {
+        background-color: #1a1a1a;
+        color: #f0f0f0;
+    }
+    
+    /* Tarjetas y contenedores */
+    .stCard {
+        background-color: #2d2d2d;
+        border: 1px solid #404040;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    /* Textos */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f0f0f0 !important;
+    }
+    
+    /* Tablas */
+    table {
+        background-color: #2d2d2d;
+        color: #f0f0f0;
+        border-collapse: collapse;
+        width: 100%;
+    }
+    
+    th, td {
+        border-bottom: 1px solid #404040;
+        padding: 12px 15px;
+        text-align: left;
+        color: #f0f0f0;
+    }
+    
+    th {
+        background-color: rgba(0, 0, 0, 0.2);
+        font-weight: 600;
+    }
+    
+    tr:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Botones */
+    .stButton > button {
+        background-color: #4a8cff;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .stButton > button:hover {
+        opacity: 0.9;
+    }
+    
+    /* Campos de entrada */
+    .stTextInput > div > div > input {
+        background-color: #2d2d2d;
+        color: #f0f0f0;
+        border: 1px solid #404040;
+    }
+    
+    /* Selectores */
+    .stSelectbox > div > div > select {
+        background-color: #2d2d2d;
+        color: #f0f0f0;
+        border: 1px solid #404040;
+    }
+    
+    /* Badges o etiquetas */
+    .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107;
+        color: #333;
+    }
+    
+    /* Resumen con tarjetas */
+    .summary-card {
+        background-color: #2d2d2d;
+        border: 1px solid #404040;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .summary-card h3 {
+        color: #4a8cff;
+        font-size: 1.1rem;
+        margin-top: 0;
+    }
+    
+    .summary-card .number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #f0f0f0;
+        margin: 10px 0;
+    }
+    
+    .summary-card .label {
+        color: #a0a0a0;
+        font-size: 0.9rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # =====================
 # CONFIGURACIÓN GOOGLE SHEETS (con secrets)
 # =====================
@@ -1115,6 +1236,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
