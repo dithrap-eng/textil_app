@@ -11,117 +11,154 @@ st.set_page_config(page_title="Sistema Textil", layout="wide")
 # Aplicar CSS personalizado para modo oscuro
 st.markdown("""
 <style>
-    /* Modo oscuro para la aplicación */
+    /* Modo oscuro para la aplicación - Selectores específicos para Streamlit */
     .stApp {
-        background-color: #1a1a1a;
-        color: #f0f0f0;
+        background-color: #0E1117 !important;
+        color: #FAFAFA !important;
     }
     
-    /* Tarjetas y contenedores */
-    .stCard {
-        background-color: #2d2d2d;
-        border: 1px solid #404040;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
+    /* Main content area */
+    .main .block-container {
+        background-color: #0E1117 !important;
+        color: #FAFAFA !important;
     }
     
-    /* Textos */
+    /* Encabezados */
     h1, h2, h3, h4, h5, h6 {
-        color: #f0f0f0 !important;
+        color: #FAFAFA !important;
+    }
+    
+    /* Texto general */
+    p, div, span {
+        color: #FAFAFA !important;
+    }
+    
+    /* Tarjetas */
+    .stCard {
+        background-color: #262730 !important;
+        border: 1px solid #404040 !important;
+        border-radius: 8px !important;
+        padding: 20px !important;
+        margin-bottom: 20px !important;
     }
     
     /* Tablas */
     table {
-        background-color: #2d2d2d;
-        color: #f0f0f0;
-        border-collapse: collapse;
-        width: 100%;
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
+        border-collapse: collapse !important;
+        width: 100% !important;
     }
     
     th, td {
-        border-bottom: 1px solid #404040;
-        padding: 12px 15px;
-        text-align: left;
-        color: #f0f0f0;
+        border-bottom: 1px solid #404040 !important;
+        padding: 12px 15px !important;
+        text-align: left !important;
+        color: #FAFAFA !important;
+        background-color: #262730 !important;
     }
     
     th {
-        background-color: rgba(0, 0, 0, 0.2);
-        font-weight: 600;
+        background-color: rgba(0, 0, 0, 0.2) !important;
+        font-weight: 600 !important;
     }
     
     tr:hover {
-        background-color: rgba(255, 255, 255, 0.05);
+        background-color: rgba(255, 255, 255, 0.05) !important;
     }
     
     /* Botones */
     .stButton > button {
-        background-color: #4a8cff;
-        color: white;
-        border: none;
-        padding: 8px 15px;
-        border-radius: 4px;
-        cursor: pointer;
+        background-color: #4a8cff !important;
+        color: white !important;
+        border: none !important;
+        padding: 8px 15px !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
     }
     
     .stButton > button:hover {
-        opacity: 0.9;
+        opacity: 0.9 !important;
     }
     
     /* Campos de entrada */
     .stTextInput > div > div > input {
-        background-color: #2d2d2d;
-        color: #f0f0f0;
-        border: 1px solid #404040;
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
+        border: 1px solid #404040 !important;
     }
     
     /* Selectores */
     .stSelectbox > div > div > select {
-        background-color: #2d2d2d;
-        color: #f0f0f0;
-        border: 1px solid #404040;
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
+        border: 1px solid #404040 !important;
     }
     
-    /* Badges o etiquetas */
+    /* Badges o etiquetas personalizadas */
     .badge {
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-        font-weight: 500;
+        display: inline-block !important;
+        padding: 3px 8px !important;
+        border-radius: 12px !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
     }
     
     .badge-warning {
-        background-color: #ffc107;
-        color: #333;
+        background-color: #ffc107 !important;
+        color: #333 !important;
     }
     
-    /* Resumen con tarjetas */
+    /* Contenedores para resumen */
+    .summary-container {
+        display: flex !important;
+        gap: 20px !important;
+        margin-bottom: 30px !important;
+        flex-wrap: wrap !important;
+    }
+    
     .summary-card {
-        background-color: #2d2d2d;
-        border: 1px solid #404040;
-        border-radius: 8px;
-        padding: 20px;
-        text-align: center;
+        background-color: #262730 !important;
+        border: 1px solid #404040 !important;
+        border-radius: 8px !important;
+        padding: 20px !important;
+        text-align: center !important;
+        flex: 1 !important;
+        min-width: 200px !important;
     }
     
     .summary-card h3 {
-        color: #4a8cff;
-        font-size: 1.1rem;
-        margin-top: 0;
+        color: #4a8cff !important;
+        font-size: 1.1rem !important;
+        margin-top: 0 !important;
     }
     
     .summary-card .number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #f0f0f0;
-        margin: 10px 0;
+        font-size: 2.5rem !important;
+        font-weight: bold !important;
+        color: #FAFAFA !important;
+        margin: 10px 0 !important;
     }
     
     .summary-card .label {
-        color: #a0a0a0;
-        font-size: 0.9rem;
+        color: #a0a0a0 !important;
+        font-size: 0.9rem !important;
+    }
+    
+    /* Ajustar colores de los datos en tablas de Streamlit */
+    .dataframe {
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
+    }
+    
+    .dataframe th {
+        background-color: #1C1C25 !important;
+        color: #FAFAFA !important;
+    }
+    
+    .dataframe td {
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1236,6 +1273,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
