@@ -610,9 +610,23 @@ elif menu == "🏭 Talleres":
     """, unsafe_allow_html=True)
     
     st.header("📋 Tablero de Producción - Talleres")
+
+    @st.cache_data(ttl=600)
+    def cargar_datos(solapa):
+        """
+        Carga datos de una solapa específica de Google Sheets
+        """
+        try:
+            sheet = client.open(SHEET_NAME).worksheet(solapa)
+            data = sheet.get_all_records()
+            return pd.DataFrame(data)
+        except Exception as e:
+            st.error(f"Error al cargar datos de {solapa}: {str(e)}")
+            return pd.DataFrame()
     
     # Obtener datos
     df_cortes = get_cortes_resumen()
+    df_historial = cargar_datos("Historial_Entregas")  # ← ¡AGREGAR ESTA LÍNEA!
     
     if not df_cortes.empty:
         # Crear o obtener worksheet de talleres
@@ -939,6 +953,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
