@@ -985,29 +985,103 @@ elif menu == "🏭 Talleres":
                     corte_info = None
             except (IndexError, KeyError):
                 corte_info = None
-               
-            # Mostrar información del corte
-            st.markdown("---")
+                
+            # Aplicar CSS personalizado para esta sección
+            st.markdown("""
+            <style>
+            .corte-info-box {
+                background-color: #262730;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            .corte-info-box h4 {
+                margin: 0 0 10px 0;
+                color: #4a8cff;
+                font-size: 1.1rem;
+            }
+            .corte-metric {
+                background-color: #1C1C25;
+                border-radius: 6px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .corte-metric h5 {
+                margin: 0;
+                font-size: 0.85rem;
+                color: #a0a0a0;
+            }
+            .corte-metric .value {
+                font-size: 1.1rem;
+                font-weight: bold;
+                color: #FAFAFA;
+            }
+            .estado-badge {
+                display: inline-block;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.8rem;
+                font-weight: 500;
+            }
+            .estado-produccion {
+                background-color: #4a8cff;
+                color: white;
+            }
+            .estado-entregado {
+                background-color: #28a745;
+                color: white;
+            }
+            .estado-otros {
+                background-color: #ffc107;
+                color: #333;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Mostrar información del corte (sin línea divisoria)
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
             
             col_info1, col_info2, col_info3 = st.columns(3)
             
             with col_info1:
-                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
-                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
+                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
+                st.markdown('<div class="corte-metric"><h5>📋 Artículo</h5><div class="value">' + str(corte_data.get("Artículo", "N/A")) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('<div class="corte-metric"><h5>🏭 Taller</h5><div class="value">' + str(corte_data.get("Taller", "N/A")) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info2:
                 # Usar Prendas de Cortes si está disponible, sino de Talleres
                 total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
-                st.metric("📏 Total Prendas", total_prendas_val)
-                st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
+                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
+                st.markdown('<div class="corte-metric"><h5>📏 Total Prendas</h5><div class="value">' + str(total_prendas_val) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('<div class="corte-metric"><h5>✅ Recibidas</h5><div class="value">' + str(corte_data.get("Prendas Recibidas", 0)) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info3:
-                # Color según estado
-                estado = corte_data.get("Estado", "")
-                color = "🟡" if "PRODUCCIÓN" in estado else "🔴" if "FALTANTES" in estado or "FALLAS" in estado else "🔵"
-                st.metric("📊 Estado", f"{color} {estado}")
-                st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
+                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
+                
+                # Determinar clase CSS según el estado
+                estado = str(corte_data.get("Estado", ""))
+                if "PRODUCCIÓN" in estado.upper():
+                    estado_class = "estado-produccion"
+                    emoji = "🔵"
+                elif "ENTREGADO" in estado.upper():
+                    estado_class = "estado-entregado"
+                    emoji = "🟢"
+                else:
+                    estado_class = "estado-otros"
+                    emoji = "🟡"
+                
+                st.markdown(f"""
+                <div class="corte-metric">
+                    <h5>📊 Estado</h5>
+                    <span class="estado-badge {estado_class}">{emoji} {estado}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown('<div class="corte-metric"><h5>❌ Falladas</h5><div class="value">' + str(corte_data.get("Prendas Falladas", 0)) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             
             # --- HISTORIAL DE ENTREGAS ---
             st.markdown("---")
@@ -1115,6 +1189,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
