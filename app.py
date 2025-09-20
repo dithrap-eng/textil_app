@@ -989,39 +989,21 @@ elif menu == "🏭 Talleres":
             # Aplicar CSS personalizado para esta sección
             st.markdown("""
             <style>
-            .corte-info-box {
-                background-color: #262730;
-                border: 1px solid #404040;
-                border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 15px;
+            .compact-metric .stMetric {
+                margin-bottom: 0.5rem;
             }
-            .corte-info-box h4 {
-                margin: 0 0 10px 0;
-                color: #4a8cff;
-                font-size: 1.1rem;
+            .compact-metric .stMetric label {
+                font-size: 0.9rem !important;
+                color: #a0a0a0 !important;
             }
-            .corte-metric {
-                background-color: #1C1C25;
-                border-radius: 6px;
-                padding: 10px;
-                margin-bottom: 10px;
-            }
-            .corte-metric h5 {
-                margin: 0;
-                font-size: 0.85rem;
-                color: #a0a0a0;
-            }
-            .corte-metric .value {
-                font-size: 1.1rem;
-                font-weight: bold;
-                color: #FAFAFA;
+            .compact-metric .stMetric value {
+                font-size: 1.1rem !important;
             }
             .estado-badge {
                 display: inline-block;
                 padding: 4px 10px;
                 border-radius: 12px;
-                font-size: 0.8rem;
+                font-size: 0.85rem;
                 font-weight: 500;
             }
             .estado-produccion {
@@ -1045,25 +1027,26 @@ elif menu == "🏭 Talleres":
             col_info1, col_info2, col_info3 = st.columns(3)
             
             with col_info1:
-                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
-                st.markdown('<div class="corte-metric"><h5>📋 Artículo</h5><div class="value">' + str(corte_data.get("Artículo", "N/A")) + '</div></div>', unsafe_allow_html=True)
-                st.markdown('<div class="corte-metric"><h5>🏭 Taller</h5><div class="value">' + str(corte_data.get("Taller", "N/A")) + '</div></div>', unsafe_allow_html=True)
+                # Aplicar clase compacta a los metrics
+                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
+                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
+                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info2:
                 # Usar Prendas de Cortes si está disponible, sino de Talleres
                 total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
-                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
-                st.markdown('<div class="corte-metric"><h5>📏 Total Prendas</h5><div class="value">' + str(total_prendas_val) + '</div></div>', unsafe_allow_html=True)
-                st.markdown('<div class="corte-metric"><h5>✅ Recibidas</h5><div class="value">' + str(corte_data.get("Prendas Recibidas", 0)) + '</div></div>', unsafe_allow_html=True)
+                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
+                st.metric("📏 Total", total_prendas_val)
+                st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col_info3:
-                st.markdown('<div class="corte-info-box">', unsafe_allow_html=True)
+                st.markdown('<div class="compact-metric">', unsafe_allow_html=True)
                 
                 # Determinar clase CSS según el estado
                 estado = str(corte_data.get("Estado", ""))
-                if "PRODUCCIÓN" in estado.upper():
+                if "PRODUCCIÓN" in estado.upper() or "PRODUCCION" in estado.upper():
                     estado_class = "estado-produccion"
                     emoji = "🔵"
                 elif "ENTREGADO" in estado.upper():
@@ -1073,14 +1056,15 @@ elif menu == "🏭 Talleres":
                     estado_class = "estado-otros"
                     emoji = "🟡"
                 
+                # Mostrar estado con badge personalizado
                 st.markdown(f"""
-                <div class="corte-metric">
-                    <h5>📊 Estado</h5>
+                <div style="margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.9rem; color: #a0a0a0; margin-bottom: 0.2rem;">📊 Estado</div>
                     <span class="estado-badge {estado_class}">{emoji} {estado}</span>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                st.markdown('<div class="corte-metric"><h5>❌ Falladas</h5><div class="value">' + str(corte_data.get("Prendas Falladas", 0)) + '</div></div>', unsafe_allow_html=True)
+                st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
                 st.markdown('</div>', unsafe_allow_html=True)
             
             # --- HISTORIAL DE ENTREGAS ---
@@ -1189,6 +1173,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
