@@ -960,17 +960,24 @@ elif menu == "🏭 Talleres":
                 background-color: #4a8cff;
                 color: white;
             }
-            .estado-entregado {
-                background-color: #28a745;
-                color: white;
+            .info-box {
+                background-color: #262730;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
             }
-            .estado-faltantes {
-                background-color: #ffc107;
-                color: #333;
+            .info-item {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
             }
-            .estado-fallas {
-                background-color: #dc3545;
-                color: white;
+            .info-label {
+                color: #a0a0a0;
+                font-weight: bold;
+            }
+            .info-value {
+                color: #ffffff;
             }
             </style>
             """, unsafe_allow_html=True)
@@ -991,7 +998,7 @@ elif menu == "🏭 Talleres":
         
         # --- INFORMACIÓN DEL CORTE SELECCIONADO ---
         if corte_seleccionado:
-            # Obtener datos del corte seleccionado
+            # Obtener datos del corte seleccionado de Talleres
             try:
                 corte_data = None
                 if "Número de Corte" in df_talleres.columns:
@@ -999,38 +1006,72 @@ elif menu == "🏭 Talleres":
                     if not corte_filtrado.empty:
                         corte_data = corte_filtrado.iloc[0]
                     else:
-                        st.error(f"❌ No se encontró el corte {corte_seleccionado}")
+                        st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
                         st.stop()
             except Exception as e:
                 st.error(f"❌ Error al buscar el corte: {str(e)}")
                 st.stop()
             
-            # Mostrar información del corte
+            # Obtener información del total de prendas desde la solapa Cortes
+            try:
+                total_prendas = 0
+                if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
+                    corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(corte_seleccionado)]
+                    if not corte_cortes.empty:
+                        total_prendas = corte_cortes.iloc[0].get("Prendas", 0)
+                else:
+                    st.warning("No se pudo obtener el total de prendas desde la solapa Cortes")
+            except Exception as e:
+                st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
+            
+            # Mostrar información simplificada del corte
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
             
-            col_info1, col_info2, col_info3 = st.columns(3)
+            st.markdown('<div class="info-box">', unsafe_allow_html=True)
             
-            with col_info1:
-                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
-                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
+            # Número de corte
+            st.markdown("""
+            <div class="info-item">
+                <span class="info-label">Número de Corte:</span>
+                <span class="info-value">{}</span>
+            </div>
+            """.format(corte_seleccionado), unsafe_allow_html=True)
             
-            with col_info2:
-                total_prendas = corte_data.get("Prendas", 0)
-                st.metric("📏 Total Prendas", total_prendas)
-                recibidas_actual = corte_data.get("Prendas Recibidas", 0)
-                st.metric("✅ Recibidas", recibidas_actual)
+            # Taller
+            taller = corte_data.get("Taller", "N/A")
+            st.markdown("""
+            <div class="info-item">
+                <span class="info-label">Taller:</span>
+                <span class="info-value">{}</span>
+            </div>
+            """.format(taller), unsafe_allow_html=True)
             
-            with col_info3:
-                # Estado actual (siempre azul para cortes en producción)
-                st.markdown(f"""
-                <div style="margin-bottom: 1rem;">
-                    <div style="font-size: 0.9rem; color: #a0a0a0; margin-bottom: 0.2rem;">📊 Estado</div>
-                    <span class="estado-badge estado-produccion">🔵 EN PRODUCCIÓN</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                falladas_actual = corte_data.get("Prendas Falladas", 0)
-                st.metric("❌ Falladas", falladas_actual)
+            # Total de prendas (desde solapa Cortes)
+            st.markdown("""
+            <div class="info-item">
+                <span class="info-label">Total Prendas:</span>
+                <span class="info-value">{}</span>
+            </div>
+            """.format(total_prendas), unsafe_allow_html=True)
+            
+            # Fecha de envío
+            fecha_envio = corte_data.get("Fecha Envío", "N/A")
+            st.markdown("""
+            <div class="info-item">
+                <span class="info-label">Fecha Envío:</span>
+                <span class="info-value">{}</span>
+            </div>
+            """.format(fecha_envio), unsafe_allow_html=True)
+            
+            # Estado (siempre azul para cortes en producción)
+            st.markdown("""
+            <div class="info-item">
+                <span class="info-label">Estado:</span>
+                <span class="estado-badge estado-produccion">🔵 EN PRODUCCIÓN</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # --- REGISTRAR ENTREGA ---
             st.markdown("---")
@@ -1070,23 +1111,26 @@ elif menu == "🏭 Talleres":
                 if faltante == 0:
                     nuevo_estado = "ENTREGADO"
                     st.success("✅ El corte se marcará como ENTREGADO")
-                else:
-                    nuevo_estado = "ENTREGADO c/FALTANTES"
-                    st.warning(f"⚠️ El corte quedará como ENTREGADO c/FALTANTES ({faltante} faltantes)")
-                
-                # Campo para fallas (solo visible si el corte se marca como ENTREGADO)
-                if faltante == 0:
+                    
+                    # Campo para fallas (solo visible si el corte se marca como ENTREGADO)
                     fallas_detectadas = st.number_input("Prendas Falladas Detectadas ❌", 
                                                        min_value=0, 
                                                        max_value=prendas_recibidas,
                                                        value=0,
                                                        help="Cantidad de prendas con fallas detectadas en el control de calidad")
+                else:
+                    nuevo_estado = "ENTREGADO c/FALTANTES"
+                    st.warning(f"⚠️ El corte quedará como ENTREGADO c/FALTANTES ({faltante} faltantes)")
                 
                 # Botón de registro
                 submitted = st.form_submit_button("📝 REGISTRAR ENTREGA", use_container_width=True, type="primary")
                 
                 if submitted:
                     # Aquí iría la lógica para actualizar Google Sheets
+                    # 1. Actualizar Talleres: Prendas Recibidas, Estado, Fecha Entrega
+                    # 2. Si hay fallas, actualizar Prendas Falladas
+                    # 3. Registrar en Historial_Entregas si es necesario
+                    
                     st.success(f"✅ Entrega registrada. Nuevo estado: {nuevo_estado}")
                     # Recargar para ver cambios
                     st.rerun()
@@ -1111,9 +1155,16 @@ elif menu == "🏭 Talleres":
                 articulo = corte.get("Artículo", "")
                 taller = corte.get("Taller", "")
                 fecha_entrega = corte.get("Fecha Entrega", "")
-                total_prendas = corte.get("Prendas", 0)
+                
+                # Obtener total de prendas desde la solapa Cortes
+                total_prendas_corte = 0
+                if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
+                    corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(nro_corte)]
+                    if not corte_cortes.empty:
+                        total_prendas_corte = corte_cortes.iloc[0].get("Prendas", 0)
+                
                 recibidas = corte.get("Prendas Recibidas", 0)
-                faltantes = max(0, total_prendas - recibidas)
+                faltantes = max(0, total_prendas_corte - recibidas)
                 
                 datos_seguimiento.append({
                     "N° Corte": nro_corte,
@@ -1130,15 +1181,16 @@ elif menu == "🏭 Talleres":
             cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
                              for _, row in df_seguimiento.iterrows()]
             
-            corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
-            
-            if corte_completar:
-                corte_id = corte_completar.split(" - ")[0]
-                st.info(f"Completando faltantes para el corte {corte_id}")
+            if cortes_options:
+                corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
                 
-                if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
-                    st.success(f"Corte {corte_id} marcado como ENTREGADO")
-                    # Aquí iría la lógica para actualizar el estado en Google Sheets
+                if corte_completar:
+                    corte_id = corte_completar.split(" - ")[0]
+                    st.info(f"Completando faltantes para el corte {corte_id}")
+                    
+                    if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
+                        st.success(f"Corte {corte_id} marcado como ENTREGADO")
+                        # Aquí iría la lógica para actualizar el estado en Google Sheets
         else:
             st.info("No hay cortes con faltantes pendientes")
         
