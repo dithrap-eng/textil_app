@@ -1013,40 +1013,74 @@ elif menu == "🏭 Talleres":
             st.markdown("---")
             st.subheader("📋 Historial de Entregas")
             
-            # Buscar en Historial_Entregas por "Número de Corte" 
-            # Convertir ambos a string para asegurar la comparación
-            df_historial["Número de Corte_str"] = df_historial["Número de Corte"].astype(str)
-            historial_corte = df_historial[df_historial["Número de Corte_str"] == str(corte_seleccionado)]
+            # DEBUG: Verificar qué columnas tiene realmente df_historial
+            st.write("🔍 Columnas en df_historial:", df_historial.columns.tolist())
+            st.write("🔍 Primeras filas de df_historial:", df_historial.head(2))
+            
+            # Buscar en Historial_Entregas - verificar múltiples nombres posibles
+            historial_corte = pd.DataFrame()
+            
+            if not df_historial.empty:
+                # Intentar con diferentes nombres de columna
+                posibles_columnas = ["Número de Corte", "Número Corte", "Nro Corte", "Corte", "Numero Corte"]
+                
+                for columna in posibles_columnas:
+                    if columna in df_historial.columns:
+                        # Convertir a string para comparar
+                        df_historial[f"{columna}_str"] = df_historial[columna].astype(str)
+                        historial_corte = df_historial[df_historial[f"{columna}_str"] == str(corte_seleccionado)]
+                        if not historial_corte.empty:
+                            break
+                
+                # Si no se encontró con nombres específicos, buscar en todas las columnas
+                if historial_corte.empty:
+                    st.warning("Buscando en todas las columnas...")
+                    for col in df_historial.columns:
+                        try:
+                            # Convertir todos los valores a string para comparar
+                            mask = df_historial[col].astype(str) == str(corte_seleccionado)
+                            if mask.any():
+                                historial_corte = df_historial[mask]
+                                break
+                        except:
+                            continue
             
             if not historial_corte.empty:
                 # Calcular total acumulado y faltante
-                total_acumulado = historial_corte["Prendas Recibidas"].sum()
+                total_acumulado = historial_corte["Prendas Recibidas"].sum() if "Prendas Recibidas" in historial_corte.columns else 0
                 
-                # Obtener el total de prendas (de Cortes con "Nro Corte")
+                # Obtener el total de prendas
                 total_prendas = 0
                 try:
                     if "Nro Corte" in df_cortes.columns:
                         df_cortes["Nro Corte_str"] = df_cortes["Nro Corte"].astype(str)
                         corte_info_cortes = df_cortes[df_cortes["Nro Corte_str"] == str(corte_seleccionado)].iloc[0]
                         total_prendas = corte_info_cortes.get("Prendas", 0)
-                    else:
-                        total_prendas = corte_data.get("Prendas", 0)
-                except (IndexError, KeyError):
+                except:
                     total_prendas = corte_data.get("Prendas", 0)
                 
                 faltante = max(0, total_prendas - total_acumulado)
                 
-                # Mostrar historial con las columnas exactas
-                st.dataframe(
-                    historial_corte[["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]],
-                    use_container_width=True
-                )
+                # Mostrar historial con las columnas disponibles
+                columnas_a_mostrar = []
+                for col in ["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]:
+                    if col in historial_corte.columns:
+                        columnas_a_mostrar.append(col)
                 
-                col_res1, col_res2 = st.columns(2)
-                with col_res1:
-                    st.metric("📦 Total Acumulado", total_acumulado)
-                with col_res2:
-                    st.metric("⚠️ Faltante", faltante)
+                if columnas_a_mostrar:
+                    st.dataframe(
+                        historial_corte[columnas_a_mostrar],
+                        use_container_width=True
+                    )
+                    
+                    col_res1, col_res2 = st.columns(2)
+                    with col_res1:
+                        st.metric("📦 Total Acumulado", total_acumulado)
+                    with col_res2:
+                        st.metric("⚠️ Faltante", faltante)
+                else:
+                    st.warning("No se encontraron las columnas esperadas")
+                    st.write("Datos disponibles:", historial_corte)
             else:
                 st.info("No hay entregas registradas para este corte")
             
@@ -1081,6 +1115,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
