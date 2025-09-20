@@ -993,11 +993,11 @@ elif menu == "🏭 Talleres":
                 margin-bottom: 0.5rem;
             }
             .compact-metric .stMetric label {
-                font-size: 0.9rem !important;
+                font-size: 1.0rem !important;
                 color: #a0a0a0 !important;
             }
             .compact-metric .stMetric value {
-                font-size: 1.1rem !important;
+                font-size: 0.9rem !important;
             }
             .estado-badge {
                 display: inline-block;
@@ -1173,6 +1173,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
