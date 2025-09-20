@@ -1013,16 +1013,30 @@ elif menu == "🏭 Talleres":
             st.markdown("---")
             st.subheader("📋 Historial de Entregas")
             
-            # Buscar en Historial_Entregas
-            historial_corte = df_historial[df_historial["Número de Corte"] == corte_seleccionado]
+            # Buscar en Historial_Entregas por "Número de Corte" 
+            # Convertir ambos a string para asegurar la comparación
+            df_historial["Número de Corte_str"] = df_historial["Número de Corte"].astype(str)
+            historial_corte = df_historial[df_historial["Número de Corte_str"] == str(corte_seleccionado)]
             
             if not historial_corte.empty:
                 # Calcular total acumulado y faltante
                 total_acumulado = historial_corte["Prendas Recibidas"].sum()
-                total_prendas = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
+                
+                # Obtener el total de prendas (de Cortes con "Nro Corte")
+                total_prendas = 0
+                try:
+                    if "Nro Corte" in df_cortes.columns:
+                        df_cortes["Nro Corte_str"] = df_cortes["Nro Corte"].astype(str)
+                        corte_info_cortes = df_cortes[df_cortes["Nro Corte_str"] == str(corte_seleccionado)].iloc[0]
+                        total_prendas = corte_info_cortes.get("Prendas", 0)
+                    else:
+                        total_prendas = corte_data.get("Prendas", 0)
+                except (IndexError, KeyError):
+                    total_prendas = corte_data.get("Prendas", 0)
+                
                 faltante = max(0, total_prendas - total_acumulado)
                 
-                # Mostrar historial
+                # Mostrar historial con las columnas exactas
                 st.dataframe(
                     historial_corte[["Fecha Entrega", "Entrega N°", "Prendas Recibidas", "Prendas Falladas", "Total Acumulado", "Estado"]],
                     use_container_width=True
@@ -1067,6 +1081,7 @@ elif menu == "🏭 Talleres":
                     # y actualizar Talleres con los nuevos totales
                     st.success("Entrega registrada exitosamente")
                     st.rerun()
+
 
 
 
