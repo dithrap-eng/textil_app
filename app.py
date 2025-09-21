@@ -917,16 +917,85 @@ elif menu == "🏭 Talleres":
                 st.markdown('</div>', unsafe_allow_html=True)
         
         # ==============================================
-        # 📦 SECCIÓN 3: SISTEMA DE ENTREGAS PARCIALES (SIMPLIFICADO)
+        # 📦 SISTEMA DE ENTREGAS (SIMPLIFICADO)
         # ==============================================
         st.markdown("---")
-        st.subheader("📦 Sistema de Entregas")
+        st.header("📦 Sistema de Entregas")
         
         # Filtrar cortes que están EN PRODUCCIÓN
         if not df_talleres.empty and "Estado" in df_talleres.columns:
             cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
         else:
             cortes_produccion = pd.DataFrame()
+        
+        # --- ESTILOS CSS ---
+        st.markdown("""
+        <style>
+        /* Selectbox estilo mejorado */
+        div[data-baseweb="select"] > div {
+            border: 2px solid #89CFF0 !important;
+            background-color: #E6F7FF !important;
+            border-radius: 8px !important;
+        }
+        div[data-baseweb="select"] label {
+            color: #0077B6 !important;
+            font-weight: bold !important;
+            font-size: 16px !important;
+        }
+        
+        /* Tarjeta de información */
+        .info-card {
+            background-color: #2d2d2d;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            border-left: 5px solid #89CFF0;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            padding: 8px;
+            background-color: #3a3a3a;
+            border-radius: 6px;
+        }
+        .info-label {
+            color: #a0a0a0;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .info-value {
+            color: #ffffff;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .estado-badge {
+            background-color: #4a8cff;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        /* Campos del formulario */
+        .prendas-input input {
+            background-color: #E6F7FF !important;
+            font-weight: bold !important;
+            border: 2px solid #89CFF0 !important;
+            color: #0077B6 !important;
+        }
+        .faltante-alert {
+            background-color: #FFF3CD;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #FFC107;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
         # --- SELECCIÓN DE CORTE ---
         if not cortes_produccion.empty:
@@ -937,58 +1006,11 @@ elif menu == "🏭 Talleres":
                 articulo = corte.get("Artículo", "Sin nombre")
                 opciones_cortes.append(f"{str(nro_corte)} - {articulo}")
             
-            # Estilo para el selectbox
-            st.markdown("""
-            <style>
-            .corte-select label {
-                color: #007bff !important;
-                font-weight: bold !important;
-                font-size: 1.1rem !important;
-            }
-            .stSelectbox > div > div {
-                border: 2px solid #007bff !important;
-                border-radius: 5px !important;
-            }
-            .estado-badge {
-                display: inline-block;
-                padding: 4px 10px;
-                border-radius: 12px;
-                font-size: 0.85rem;
-                font-weight: 500;
-            }
-            .estado-produccion {
-                background-color: #4a8cff;
-                color: white;
-            }
-            .info-box {
-                background-color: #262730;
-                border: 1px solid #404040;
-                border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 15px;
-            }
-            .info-item {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 10px;
-            }
-            .info-label {
-                color: #a0a0a0;
-                font-weight: bold;
-            }
-            .info-value {
-                color: #ffffff;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown('<div class="corte-select">', unsafe_allow_html=True)
             corte_seleccionado_str = st.selectbox(
                 "Seleccionar Corte para Registrar Entrega",
                 options=opciones_cortes,
                 index=0
             )
-            st.markdown('</div>', unsafe_allow_html=True)
             
             # Extraer solo el número de corte
             corte_seleccionado = corte_seleccionado_str.split(" - ")[0]
@@ -1024,122 +1046,113 @@ elif menu == "🏭 Talleres":
             except Exception as e:
                 st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
             
-            # Mostrar información simplificada del corte
-            st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
-            
-            st.markdown('<div class="info-box">', unsafe_allow_html=True)
-            
-            # Número de corte
-            st.markdown("""
-            <div class="info-item">
-                <span class="info-label">Número de Corte:</span>
-                <span class="info-value">{}</span>
-            </div>
-            """.format(corte_seleccionado), unsafe_allow_html=True)
+            # Mostrar información simplificada del corte en tarjeta
+            st.markdown('<div class="info-card">', unsafe_allow_html=True)
             
             # Taller
             taller = corte_data.get("Taller", "N/A")
-            st.markdown("""
-            <div class="info-item">
+            st.markdown(f"""
+            <div class="info-row">
                 <span class="info-label">Taller:</span>
-                <span class="info-value">{}</span>
+                <span class="info-value">{taller}</span>
             </div>
-            """.format(taller), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
-            # Total de prendas (desde solapa Cortes)
-            st.markdown("""
-            <div class="info-item">
+            # Total de prendas
+            st.markdown(f"""
+            <div class="info-row">
                 <span class="info-label">Total Prendas:</span>
-                <span class="info-value">{}</span>
+                <span class="info-value">{total_prendas}</span>
             </div>
-            """.format(total_prendas), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
-            # Fecha de envío
+            # Fecha de envío (solo fecha, sin hora)
             fecha_envio = corte_data.get("Fecha Envío", "N/A")
-            st.markdown("""
-            <div class="info-item">
-                <span class="info-label">Fecha Envío:</span>
-                <span class="info-value">{}</span>
-            </div>
-            """.format(fecha_envio), unsafe_allow_html=True)
+            if isinstance(fecha_envio, str) and " " in fecha_envio:
+                fecha_envio = fecha_envio.split(" ")[0]  # Tomar solo la parte de la fecha
             
-            # Estado (siempre azul para cortes en producción)
-            st.markdown("""
-            <div class="info-item">
+            st.markdown(f"""
+            <div class="info-row">
+                <span class="info-label">Fecha Envío:</span>
+                <span class="info-value">{fecha_envio}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Estado
+            st.markdown(f"""
+            <div class="info-row">
                 <span class="info-label">Estado:</span>
-                <span class="estado-badge estado-produccion">🔵 EN PRODUCCIÓN</span>
+                <span class="estado-badge">EN PRODUCCIÓN</span>
             </div>
             """, unsafe_allow_html=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
             
             # --- REGISTRAR ENTREGA ---
-            st.markdown("---")
             st.subheader("📤 Registrar Entrega")
             
-            with st.form(key=f"entrega_form_{corte_seleccionado}"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
-                
-                with col2:
-                    # Campo destacado para prendas recibidas
-                    st.markdown("""
-                    <style>
-                    .prendas-recibidas input {
-                        background-color: #e6f7ff !important;
-                        font-weight: bold !important;
-                        border: 2px solid #007bff !important;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    st.markdown('<div class="prendas-recibidas">', unsafe_allow_html=True)
-                    prendas_recibidas = st.number_input("Prendas Recibidas ✅", 
-                                                      min_value=0, 
-                                                      max_value=total_prendas,
-                                                      value=0)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Calcular faltante automáticamente
-                faltante = max(0, total_prendas - prendas_recibidas)
-                
-                # Mostrar resultado del cálculo
-                st.info(f"**🧮 Faltante después de esta entrega: {faltante} prendas**")
-                
+            # Usar columns para alinear fecha y prendas recibidas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
+            
+            with col2:
+                st.markdown('<div class="prendas-input">', unsafe_allow_html=True)
+                prendas_recibidas = st.number_input("Prendas Recibidas", 
+                                                  min_value=0, 
+                                                  max_value=total_prendas,
+                                                  value=0,
+                                                  key="prendas_recibidas")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Calcular faltante en tiempo real
+            faltante = max(0, total_prendas - prendas_recibidas)
+            
+            # Mostrar faltante solo si hay faltantes
+            if faltante > 0:
+                st.markdown(f"""
+                <div class="faltante-alert">
+                    ⚠️ Faltan {faltante} prendas para completar el corte
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Campo para fallas (solo si el corte se completa)
+            if prendas_recibidas == total_prendas:
+                fallas_detectadas = st.number_input("Prendas Falladas Detectadas", 
+                                                   min_value=0, 
+                                                   max_value=prendas_recibidas,
+                                                   value=0,
+                                                   help="Cantidad de prendas con fallas detectadas")
+            
+            # Botón de registro
+            if st.button("📝 REGISTRAR ENTREGA", use_container_width=True, type="primary"):
                 # Determinar nuevo estado
                 if faltante == 0:
                     nuevo_estado = "ENTREGADO"
-                    st.success("✅ El corte se marcará como ENTREGADO")
-                    
-                    # Campo para fallas (solo visible si el corte se marca como ENTREGADO)
-                    fallas_detectadas = st.number_input("Prendas Falladas Detectadas ❌", 
-                                                       min_value=0, 
-                                                       max_value=prendas_recibidas,
-                                                       value=0,
-                                                       help="Cantidad de prendas con fallas detectadas en el control de calidad")
+                    mensaje = "✅ Entrega completada - Corte marcado como ENTREGADO"
                 else:
                     nuevo_estado = "ENTREGADO c/FALTANTES"
-                    st.warning(f"⚠️ El corte quedará como ENTREGADO c/FALTANTES ({faltante} faltantes)")
+                    mensaje = f"⚠️ Entrega parcial - {faltante} faltantes"
                 
-                # Botón de registro
-                submitted = st.form_submit_button("📝 REGISTRAR ENTREGA", use_container_width=True, type="primary")
-                
-                if submitted:
-                    # Aquí iría la lógica para actualizar Google Sheets
-                    # 1. Actualizar Talleres: Prendas Recibidas, Estado, Fecha Entrega
-                    # 2. Si hay fallas, actualizar Prendas Falladas
-                    # 3. Registrar en Historial_Entregas si es necesario
+                # Aquí iría la lógica para guardar en Google Sheets
+                try:
+                    # 1. Actualizar Talleres
+                    # worksheet_talleres.update(...)
                     
-                    st.success(f"✅ Entrega registrada. Nuevo estado: {nuevo_estado}")
-                    # Recargar para ver cambios
+                    # 2. Registrar en Historial_Entrega si es necesario
+                    # worksheet_historial.append_row(...)
+                    
+                    st.success(mensaje)
                     st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
         
         # ==============================================
-        # 📋 SECCIÓN 4: SEGUIMIENTO DE FALTANTES
+        # 📋 SEGUIMIENTO DE CORTES CON FALTANTES
         # ==============================================
         st.markdown("---")
-        st.subheader("📋 Seguimiento de Cortes con Faltantes")
+        st.header("📋 Seguimiento de Cortes con Faltantes")
         
         # Filtrar cortes con faltantes
         if not df_talleres.empty and "Estado" in df_talleres.columns:
@@ -1175,30 +1188,33 @@ elif menu == "🏭 Talleres":
                 })
             
             df_seguimiento = pd.DataFrame(datos_seguimiento)
-            st.dataframe(df_seguimiento, use_container_width=True)
             
-            # Seleccionar corte para completar faltantes
-            cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
-                             for _, row in df_seguimiento.iterrows()]
-            
-            if cortes_options:
+            if not df_seguimiento.empty:
+                st.dataframe(df_seguimiento, use_container_width=True)
+                
+                # Seleccionar corte para completar faltantes
+                cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
+                                 for _, row in df_seguimiento.iterrows()]
+                
                 corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
                 
                 if corte_completar:
                     corte_id = corte_completar.split(" - ")[0]
-                    st.info(f"Completando faltantes para el corte {corte_id}")
                     
                     if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
+                        # Aquí iría la lógica para actualizar Google Sheets
                         st.success(f"Corte {corte_id} marcado como ENTREGADO")
-                        # Aquí iría la lógica para actualizar el estado en Google Sheets
+                        st.rerun()
+            else:
+                st.info("No hay cortes con faltantes pendientes")
         else:
             st.info("No hay cortes con faltantes pendientes")
         
         # ==============================================
-        # 🔄 SECCIÓN 5: SISTEMA DE DEVOLUCIONES
+        # 🔄 SISTEMA DE DEVOLUCIONES
         # ==============================================
         st.markdown("---")
-        st.subheader("🔄 Sistema de Devoluciones")
+        st.header("🔄 Sistema de Devoluciones")
         
         # Filtrar cortes entregados que pueden tener devoluciones
         if not df_talleres.empty and "Estado" in df_talleres.columns:
@@ -1252,9 +1268,13 @@ elif menu == "🏭 Talleres":
                     submitted_dev = st.form_submit_button("📦 REGISTRAR DEVOLUCIÓN", type="primary")
                     
                     if submitted_dev:
-                        # Aquí iría la lógica para registrar la devolución
-                        st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
-                        st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
+                        # Aquí iría la lógica para guardar en Google Sheets
+                        try:
+                            # worksheet_devoluciones.append_row([...])
+                            st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
+                            st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
+                        except Exception as e:
+                            st.error(f"❌ Error al guardar la devolución: {str(e)}")
         else:
             st.info("No hay cortes entregados disponibles para devolución")
 
