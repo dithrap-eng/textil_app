@@ -917,7 +917,7 @@ elif menu == "🏭 Talleres":
                 st.markdown('</div>', unsafe_allow_html=True)
         
         # ==============================================
-        # 📦 SISTEMA DE ENTREGAS (SIMPLIFICADO)
+        # 📦 SISTEMA DE ENTREGAS (ESTILO MEJORADO)
         # ==============================================
         st.markdown("---")
         st.header("📦 Sistema de Entregas")
@@ -943,21 +943,22 @@ elif menu == "🏭 Talleres":
             font-size: 16px !important;
         }
         
-        /* Tarjeta de información */
-        .info-card {
+        /* Estilo similar a la captura - Información del corte */
+        .corte-info-container {
             background-color: #2d2d2d;
             border-radius: 10px;
             padding: 20px;
             margin: 15px 0;
-            border-left: 5px solid #89CFF0;
+            border: 1px solid #404040;
         }
-        .info-row {
+        .info-line {
             display: flex;
             justify-content: space-between;
-            margin: 12px 0;
-            padding: 8px;
+            margin: 15px 0;
+            padding: 12px;
             background-color: #3a3a3a;
-            border-radius: 6px;
+            border-radius: 8px;
+            border-left: 4px solid #89CFF0;
         }
         .info-label {
             color: #a0a0a0;
@@ -967,14 +968,14 @@ elif menu == "🏭 Talleres":
         .info-value {
             color: #ffffff;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 15px;
         }
         .estado-badge {
             background-color: #4a8cff;
             color: white;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 12px;
+            padding: 6px 15px;
+            border-radius: 18px;
+            font-size: 13px;
             font-weight: bold;
         }
         
@@ -1046,13 +1047,13 @@ elif menu == "🏭 Talleres":
             except Exception as e:
                 st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
             
-            # Mostrar información simplificada del corte en tarjeta
-            st.markdown('<div class="info-card">', unsafe_allow_html=True)
+            # Mostrar información del corte con el estilo de la captura
+            st.markdown('<div class="corte-info-container">', unsafe_allow_html=True)
             
             # Taller
             taller = corte_data.get("Taller", "N/A")
             st.markdown(f"""
-            <div class="info-row">
+            <div class="info-line">
                 <span class="info-label">Taller:</span>
                 <span class="info-value">{taller}</span>
             </div>
@@ -1060,7 +1061,7 @@ elif menu == "🏭 Talleres":
             
             # Total de prendas
             st.markdown(f"""
-            <div class="info-row">
+            <div class="info-line">
                 <span class="info-label">Total Prendas:</span>
                 <span class="info-value">{total_prendas}</span>
             </div>
@@ -1072,7 +1073,7 @@ elif menu == "🏭 Talleres":
                 fecha_envio = fecha_envio.split(" ")[0]  # Tomar solo la parte de la fecha
             
             st.markdown(f"""
-            <div class="info-row">
+            <div class="info-line">
                 <span class="info-label">Fecha Envío:</span>
                 <span class="info-value">{fecha_envio}</span>
             </div>
@@ -1080,7 +1081,7 @@ elif menu == "🏭 Talleres":
             
             # Estado
             st.markdown(f"""
-            <div class="info-row">
+            <div class="info-line">
                 <span class="info-label">Estado:</span>
                 <span class="estado-badge">EN PRODUCCIÓN</span>
             </div>
@@ -1135,18 +1136,62 @@ elif menu == "🏭 Talleres":
                     nuevo_estado = "ENTREGADO c/FALTANTES"
                     mensaje = f"⚠️ Entrega parcial - {faltante} faltantes"
                 
-                # Aquí iría la lógica para guardar en Google Sheets
+                # Lógica para guardar en Google Sheets
                 try:
                     # 1. Actualizar Talleres
-                    # worksheet_talleres.update(...)
+                    # Buscar la fila correspondiente en Talleres
+                    talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                    talleres_data = talleres_worksheet.get_all_records()
                     
-                    # 2. Registrar en Historial_Entrega si es necesario
-                    # worksheet_historial.append_row(...)
+                    # Encontrar el índice de la fila a actualizar
+                    for i, row in enumerate(talleres_data):
+                        if str(row.get("Número de Corte", "")) == str(corte_seleccionado):
+                            # Actualizar los valores
+                            update_range = f"G{i+2}"  # Columna G = Prendas Recibidas
+                            talleres_worksheet.update(update_range, [[prendas_recibidas]])
+                            
+                            # Actualizar estado si es diferente
+                            if row.get("Estado") != nuevo_estado:
+                                estado_range = f"I{i+2}"  # Columna I = Estado
+                                talleres_worksheet.update(estado_range, [[nuevo_estado]])
+                            
+                            # Actualizar fecha de entrega
+                            fecha_range = f"F{i+2}"  # Columna F = Fecha Entrega
+                            talleres_worksheet.update(fecha_range, [[fecha_entrega.strftime("%Y-%m-%d")]])
+                            
+                            # Actualizar prendas falladas si corresponde
+                            if faltante == 0 and fallas_detectadas > 0:
+                                fallas_range = f"H{i+2}"  # Columna H = Prendas Falladas
+                                talleres_worksheet.update(fallas_range, [[fallas_detectadas]])
+                            
+                            break
+                    
+                    # 2. Registrar en Historial_Entrega
+                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entrega")
+                    siguiente_fila = len(historial_worksheet.get_all_values()) + 1
+                    
+                    # Datos para la nueva fila
+                    nueva_entrega = [
+                        corte_seleccionado,  # Número de Corte
+                        corte_data.get("Artículo", ""),  # Artículo
+                        taller,  # Taller
+                        fecha_entrega.strftime("%Y-%m-%d"),  # Fecha Entrega
+                        1,  # Entrega N° (asumimos que es la primera)
+                        prendas_recibidas,  # Prendas Recibidas
+                        0,  # Fallado p/Oferta (0 por defecto)
+                        0,  # Devolver p/Arreglar (0 por defecto)
+                        faltante,  # Faltantes
+                        nuevo_estado  # Estado
+                    ]
+                    
+                    historial_worksheet.append_row(nueva_entrega)
                     
                     st.success(mensaje)
                     st.rerun()
+                    
                 except Exception as e:
                     st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
+                    st.write("Detalles del error:", str(e))
         
         # ==============================================
         # 📋 SEGUIMIENTO DE CORTES CON FALTANTES
@@ -1154,61 +1199,81 @@ elif menu == "🏭 Talleres":
         st.markdown("---")
         st.header("📋 Seguimiento de Cortes con Faltantes")
         
-        # Filtrar cortes con faltantes
-        if not df_talleres.empty and "Estado" in df_talleres.columns:
-            cortes_faltantes = df_talleres[df_talleres["Estado"] == "ENTREGADO c/FALTANTES"]
-        else:
-            cortes_faltantes = pd.DataFrame()
+        try:
+            # Cargar datos actualizados de Talleres
+            talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+            df_talleres_actualizado = pd.DataFrame(talleres_worksheet.get_all_records())
+            
+            # Filtrar cortes con faltantes
+            if not df_talleres_actualizado.empty and "Estado" in df_talleres_actualizado.columns:
+                cortes_faltantes = df_talleres_actualizado[df_talleres_actualizado["Estado"] == "ENTREGADO c/FALTANTES"]
+            else:
+                cortes_faltantes = pd.DataFrame()
         
-        if not cortes_faltantes.empty:
-            # Crear tabla de seguimiento
-            datos_seguimiento = []
-            for _, corte in cortes_faltantes.iterrows():
-                nro_corte = corte.get("Número de Corte", "")
-                articulo = corte.get("Artículo", "")
-                taller = corte.get("Taller", "")
-                fecha_entrega = corte.get("Fecha Entrega", "")
-                
-                # Obtener total de prendas desde la solapa Cortes
-                total_prendas_corte = 0
-                if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
-                    corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(nro_corte)]
-                    if not corte_cortes.empty:
-                        total_prendas_corte = corte_cortes.iloc[0].get("Prendas", 0)
-                
-                recibidas = corte.get("Prendas Recibidas", 0)
-                faltantes = max(0, total_prendas_corte - recibidas)
-                
-                datos_seguimiento.append({
-                    "N° Corte": nro_corte,
-                    "Artículo": articulo,
-                    "Taller": taller,
-                    "Fecha Entrega": fecha_entrega,
-                    "Faltantes": faltantes
-                })
-            
-            df_seguimiento = pd.DataFrame(datos_seguimiento)
-            
-            if not df_seguimiento.empty:
-                st.dataframe(df_seguimiento, use_container_width=True)
-                
-                # Seleccionar corte para completar faltantes
-                cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
-                                 for _, row in df_seguimiento.iterrows()]
-                
-                corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
-                
-                if corte_completar:
-                    corte_id = corte_completar.split(" - ")[0]
+            if not cortes_faltantes.empty:
+                # Crear tabla de seguimiento
+                datos_seguimiento = []
+                for _, corte in cortes_faltantes.iterrows():
+                    nro_corte = corte.get("Número de Corte", "")
+                    articulo = corte.get("Artículo", "")
+                    taller = corte.get("Taller", "")
+                    fecha_entrega = corte.get("Fecha Entrega", "")
                     
-                    if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
-                        # Aquí iría la lógica para actualizar Google Sheets
-                        st.success(f"Corte {corte_id} marcado como ENTREGADO")
-                        st.rerun()
+                    # Obtener total de prendas desde la solapa Cortes
+                    total_prendas_corte = 0
+                    if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
+                        corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(nro_corte)]
+                        if not corte_cortes.empty:
+                            total_prendas_corte = corte_cortes.iloc[0].get("Prendas", 0)
+                    
+                    recibidas = corte.get("Prendas Recibidas", 0)
+                    faltantes = max(0, total_prendas_corte - recibidas)
+                    
+                    datos_seguimiento.append({
+                        "N° Corte": nro_corte,
+                        "Artículo": articulo,
+                        "Taller": taller,
+                        "Fecha Entrega": fecha_entrega,
+                        "Faltantes": faltantes
+                    })
+                
+                df_seguimiento = pd.DataFrame(datos_seguimiento)
+                
+                if not df_seguimiento.empty:
+                    st.dataframe(df_seguimiento, use_container_width=True)
+                    
+                    # Seleccionar corte para completar faltantes
+                    cortes_options = [f"{row['N° Corte']} - {row['Artículo']} ({row['Faltantes']} faltantes)" 
+                                     for _, row in df_seguimiento.iterrows()]
+                    
+                    corte_completar = st.selectbox("Seleccionar corte para completar faltantes", options=cortes_options)
+                    
+                    if corte_completar:
+                        corte_id = corte_completar.split(" - ")[0]
+                        
+                        if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
+                            try:
+                                # Actualizar estado en Google Sheets
+                                talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                                talleres_data = talleres_worksheet.get_all_records()
+                                
+                                for i, row in enumerate(talleres_data):
+                                    if str(row.get("Número de Corte", "")) == str(corte_id):
+                                        estado_range = f"I{i+2}"  # Columna I = Estado
+                                        talleres_worksheet.update(estado_range, [["ENTREGADO"]])
+                                        break
+                                
+                                st.success(f"Corte {corte_id} marcado como ENTREGADO")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Error al actualizar Google Sheets: {str(e)}")
+                else:
+                    st.info("No hay cortes con faltantes pendientes")
             else:
                 st.info("No hay cortes con faltantes pendientes")
-        else:
-            st.info("No hay cortes con faltantes pendientes")
+        
+        except Exception as e:
+            st.error(f"❌ Error al cargar datos de seguimiento: {str(e)}")
         
         # ==============================================
         # 🔄 SISTEMA DE DEVOLUCIONES
@@ -1216,67 +1281,100 @@ elif menu == "🏭 Talleres":
         st.markdown("---")
         st.header("🔄 Sistema de Devoluciones")
         
-        # Filtrar cortes entregados que pueden tener devoluciones
-        if not df_talleres.empty and "Estado" in df_talleres.columns:
-            cortes_entregados = df_talleres[
-                (df_talleres["Estado"] == "ENTREGADO") | 
-                (df_talleres["Estado"] == "ENTREGADO c/FALTANTES")
-            ]
-        else:
-            cortes_entregados = pd.DataFrame()
+        try:
+            # Cargar datos actualizados de Talleres
+            talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+            df_talleres_actualizado = pd.DataFrame(talleres_worksheet.get_all_records())
+            
+            # Filtrar cortes entregados que pueden tener devoluciones
+            if not df_talleres_actualizado.empty and "Estado" in df_talleres_actualizado.columns:
+                cortes_entregados = df_talleres_actualizado[
+                    (df_talleres_actualizado["Estado"] == "ENTREGADO") | 
+                    (df_talleres_actualizado["Estado"] == "ENTREGADO c/FALTANTES")
+                ]
+            else:
+                cortes_entregados = pd.DataFrame()
         
-        if not cortes_entregados.empty:
-            # Seleccionar corte para devolución
-            opciones_devolucion = []
-            for _, corte in cortes_entregados.iterrows():
-                nro_corte = corte.get("Número de Corte", "Desconocido")
-                articulo = corte.get("Artículo", "Sin nombre")
-                opciones_devolucion.append(f"{str(nro_corte)} - {articulo}")
-            
-            corte_devolucion_str = st.selectbox(
-                "Seleccionar Corte para Devolución",
-                options=opciones_devolucion
-            )
-            
-            if corte_devolucion_str:
-                corte_devolucion_id = corte_devolucion_str.split(" - ")[0]
+            if not cortes_entregados.empty:
+                # Seleccionar corte para devolución
+                opciones_devolucion = []
+                for _, corte in cortes_entregados.iterrows():
+                    nro_corte = corte.get("Número de Corte", "Desconocido")
+                    articulo = corte.get("Artículo", "Sin nombre")
+                    opciones_devolucion.append(f"{str(nro_corte)} - {articulo}")
                 
-                # Obtener datos del corte seleccionado
-                corte_dev_data = df_talleres[
-                    df_talleres["Número de Corte"].astype(str) == str(corte_devolucion_id)
-                ].iloc[0]
+                corte_devolucion_str = st.selectbox(
+                    "Seleccionar Corte para Devolución",
+                    options=opciones_devolucion
+                )
                 
-                recibidas_dev = corte_dev_data.get("Prendas Recibidas", 0)
-                
-                with st.form(key=f"devolucion_form_{corte_devolucion_id}"):
-                    st.write(f"**Corte:** {corte_devolucion_id} - {corte_dev_data.get('Artículo', '')}")
-                    st.write(f"**Prendas recibidas:** {recibidas_dev}")
+                if corte_devolucion_str:
+                    corte_devolucion_id = corte_devolucion_str.split(" - ")[0]
                     
-                    col_dev1, col_dev2 = st.columns(2)
+                    # Obtener datos del corte seleccionado
+                    corte_dev_data = df_talleres_actualizado[
+                        df_talleres_actualizado["Número de Corte"].astype(str) == str(corte_devolucion_id)
+                    ].iloc[0]
                     
-                    with col_dev1:
-                        fecha_devolucion = st.date_input("Fecha de Devolución", value=date.today())
+                    recibidas_dev = corte_dev_data.get("Prendas Recibidas", 0)
                     
-                    with col_dev2:
-                        prendas_devolver = st.number_input("Prendas a Devolver", 
-                                                          min_value=1, 
-                                                          max_value=recibidas_dev,
-                                                          value=1)
-                    
-                    observaciones = st.text_area("Observaciones/Motivo de la devolución")
-                    
-                    submitted_dev = st.form_submit_button("📦 REGISTRAR DEVOLUCIÓN", type="primary")
-                    
-                    if submitted_dev:
-                        # Aquí iría la lógica para guardar en Google Sheets
-                        try:
-                            # worksheet_devoluciones.append_row([...])
-                            st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
-                            st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
-                        except Exception as e:
-                            st.error(f"❌ Error al guardar la devolución: {str(e)}")
-        else:
-            st.info("No hay cortes entregados disponibles para devolución")
+                    with st.form(key=f"devolucion_form_{corte_devolucion_id}"):
+                        st.write(f"**Corte:** {corte_devolucion_id} - {corte_dev_data.get('Artículo', '')}")
+                        st.write(f"**Prendas recibidas:** {recibidas_dev}")
+                        
+                        col_dev1, col_dev2 = st.columns(2)
+                        
+                        with col_dev1:
+                            fecha_devolucion = st.date_input("Fecha de Devolución", value=date.today())
+                        
+                        with col_dev2:
+                            prendas_devolver = st.number_input("Prendas a Devolver", 
+                                                              min_value=1, 
+                                                              max_value=recibidas_dev,
+                                                              value=1)
+                        
+                        observaciones = st.text_area("Observaciones/Motivo de la devolución")
+                        
+                        submitted_dev = st.form_submit_button("📦 REGISTRAR DEVOLUCIÓN", type="primary")
+                        
+                        if submitted_dev:
+                            try:
+                                # Registrar en la hoja de Devoluciones
+                                devoluciones_worksheet = client.open(SHEET_NAME).worksheet("Devoluciones")
+                                siguiente_fila = len(devoluciones_worksheet.get_all_values()) + 1
+                                
+                                nueva_devolucion = [
+                                    corte_devolucion_id,  # Número de Corte
+                                    fecha_devolucion.strftime("%Y-%m-%d"),  # Fecha Devolución
+                                    prendas_devolver,  # Prendas Devueltas
+                                    observaciones,  # Observaciones
+                                    "ARREGLANDO FALLAS"  # Estado
+                                ]
+                                
+                                devoluciones_worksheet.append_row(nueva_devolucion)
+                                
+                                # Actualizar estado en Talleres
+                                talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                                talleres_data = talleres_worksheet.get_all_records()
+                                
+                                for i, row in enumerate(talleres_data):
+                                    if str(row.get("Número de Corte", "")) == str(corte_devolucion_id):
+                                        estado_range = f"I{i+2}"  # Columna I = Estado
+                                        talleres_worksheet.update(estado_range, [["ARREGLANDO FALLAS"]])
+                                        break
+                                
+                                st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
+                                st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"❌ Error al guardar la devolución: {str(e)}")
+            else:
+                st.info("No hay cortes entregados disponibles para devolución")
+        
+        except Exception as e:
+            st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
