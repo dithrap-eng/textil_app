@@ -943,40 +943,46 @@ elif menu == "🏭 Talleres":
             font-size: 16px !important;
         }
         
-        /* Estilo similar a la captura - Información del corte */
-        .corte-info-container {
+        /* Estilo compacto similar a la captura */
+        .corte-info-compact {
             background-color: #2d2d2d;
             border-radius: 10px;
-            padding: 20px;
+            padding: 15px;
             margin: 15px 0;
             border: 1px solid #404040;
         }
-        .info-line {
+        .info-row-compact {
             display: flex;
-            justify-content: space-between;
-            margin: 15px 0;
-            padding: 12px;
-            background-color: #3a3a3a;
-            border-radius: 8px;
-            border-left: 4px solid #89CFF0;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px 12px;
         }
-        .info-label {
+        .info-icon {
+            margin-right: 12px;
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+        .info-label-compact {
             color: #a0a0a0;
             font-weight: bold;
             font-size: 14px;
+            min-width: 100px;
         }
-        .info-value {
+        .info-value-compact {
             color: #ffffff;
             font-weight: 500;
-            font-size: 15px;
+            font-size: 14px;
+            flex-grow: 1;
         }
-        .estado-badge {
+        .estado-badge-compact {
             background-color: #4a8cff;
             color: white;
-            padding: 6px 15px;
-            border-radius: 18px;
-            font-size: 13px;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
             font-weight: bold;
+            margin-left: 10px;
         }
         
         /* Campos del formulario */
@@ -989,11 +995,12 @@ elif menu == "🏭 Talleres":
         .faltante-alert {
             background-color: #FFF3CD;
             color: #856404;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            border-left: 5px solid #FFC107;
+            border-left: 4px solid #FFC107;
             margin: 15px 0;
             font-weight: bold;
+            font-size: 14px;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -1047,23 +1054,25 @@ elif menu == "🏭 Talleres":
             except Exception as e:
                 st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
             
-            # Mostrar información del corte con el estilo de la captura
-            st.markdown('<div class="corte-info-container">', unsafe_allow_html=True)
+            # Mostrar información del corte con estilo compacto
+            st.markdown('<div class="corte-info-compact">', unsafe_allow_html=True)
             
             # Taller
             taller = corte_data.get("Taller", "N/A")
             st.markdown(f"""
-            <div class="info-line">
-                <span class="info-label">Taller:</span>
-                <span class="info-value">{taller}</span>
+            <div class="info-row-compact">
+                <span class="info-icon">🏭</span>
+                <span class="info-label-compact">Taller:</span>
+                <span class="info-value-compact">{taller}</span>
             </div>
             """, unsafe_allow_html=True)
             
             # Total de prendas
             st.markdown(f"""
-            <div class="info-line">
-                <span class="info-label">Total Prendas:</span>
-                <span class="info-value">{total_prendas}</span>
+            <div class="info-row-compact">
+                <span class="info-icon">📏</span>
+                <span class="info-label-compact">Total Prendas:</span>
+                <span class="info-value-compact">{total_prendas}</span>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1073,17 +1082,21 @@ elif menu == "🏭 Talleres":
                 fecha_envio = fecha_envio.split(" ")[0]  # Tomar solo la parte de la fecha
             
             st.markdown(f"""
-            <div class="info-line">
-                <span class="info-label">Fecha Envío:</span>
-                <span class="info-value">{fecha_envio}</span>
+            <div class="info-row-compact">
+                <span class="info-icon">📅</span>
+                <span class="info-label-compact">Fecha Envío:</span>
+                <span class="info-value-compact">{fecha_envio}</span>
             </div>
             """, unsafe_allow_html=True)
             
             # Estado
             st.markdown(f"""
-            <div class="info-line">
-                <span class="info-label">Estado:</span>
-                <span class="estado-badge">EN PRODUCCIÓN</span>
+            <div class="info-row-compact">
+                <span class="info-icon">📊</span>
+                <span class="info-label-compact">Estado:</span>
+                <span class="info-value-compact">
+                    <span class="estado-badge-compact">EN PRODUCCIÓN</span>
+                </span>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1167,7 +1180,7 @@ elif menu == "🏭 Talleres":
                             break
                     
                     # 2. Registrar en Historial_Entrega
-                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entrega")
                     siguiente_fila = len(historial_worksheet.get_all_values()) + 1
                     
                     # Datos para la nueva fila
@@ -1374,7 +1387,6 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
-
 
 
 
