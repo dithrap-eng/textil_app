@@ -1180,7 +1180,7 @@ elif menu == "🏭 Talleres":
                             break
                     
                     # 2. Registrar en Historial_Entrega
-                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entrega")
+                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
                     siguiente_fila = len(historial_worksheet.get_all_values()) + 1
                     
                     # Datos para la nueva fila
@@ -1387,6 +1387,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
