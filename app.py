@@ -1022,7 +1022,7 @@ elif menu == "🏭 Talleres":
                 margin-right: 5px;
             }
             .info-value-simple {
-                color: #ffffff;
+                color: #3d3a3a;
                 font-weight: bold;
             }
             .estado-simple {
@@ -1362,6 +1362,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
