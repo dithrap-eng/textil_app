@@ -980,7 +980,7 @@ elif menu == "🏭 Talleres":
         
         
         
-        --------------
+       
         st.markdown("---")
         st.header("📦 Sistema de Entregas")
         
@@ -1449,6 +1449,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
