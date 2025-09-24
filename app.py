@@ -953,83 +953,6 @@ elif menu == "🏭 Talleres":
 
 
         
-        # --- ESTILOS CSS ---
-        st.markdown("""
-        <style>
-        /* Selectbox estilo mejorado */
-        div[data-baseweb="select"] > div {
-            border: 2px solid #89CFF0 !important;
-            background-color: #E6F7FF !important;
-            border-radius: 8px !important;
-        }
-        div[data-baseweb="select"] label {
-            color: #0077B6 !important;
-            font-weight: bold !important;
-            font-size: 16px !important;
-        }
-        
-        /* Estilo compacto similar a la captura */
-        .corte-info-compact {
-            background-color: #2d2d2d;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            border: 1px solid #404040;
-        }
-        .info-row-compact {
-            display: flex;
-            align-items: center;
-            margin: 10px 0;
-            padding: 8px 12px;
-        }
-        .info-icon {
-            margin-right: 12px;
-            font-size: 18px;
-            width: 24px;
-            text-align: center;
-        }
-        .info-label-compact {
-            color: #a0a0a0;
-            font-weight: bold;
-            font-size: 14px;
-            min-width: 100px;
-        }
-        .info-value-compact {
-            color: #ffffff;
-            font-weight: 500;
-            font-size: 14px;
-            flex-grow: 1;
-        }
-        .estado-badge-compact {
-            background-color: #4a8cff;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-        
-        /* Campos del formulario */
-        .prendas-input input {
-            background-color: #E6F7FF !important;
-            font-weight: bold !important;
-            border: 2px solid #89CFF0 !important;
-            color: #0077B6 !important;
-        }
-        .faltante-alert {
-            background-color: #FFF3CD;
-            color: #856404;
-            padding: 12px;
-            border-radius: 8px;
-            border-left: 4px solid #FFC107;
-            margin: 15px 0;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
         # --- SELECCIÓN DE CORTE ---
         if not cortes_produccion.empty:
             # Crear lista de cortes para el dropdown
@@ -1412,6 +1335,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
