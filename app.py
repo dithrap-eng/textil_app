@@ -919,41 +919,15 @@ elif menu == "🏭 Talleres":
         # ==============================================
         # 📦 SISTEMA DE ENTREGAS (ESTILO MEJORADO)
         # ==============================================
-        # --- GESTIÓN DE ENTREGA PARCIAL ---
-        if corte_seleccionado:
-            # Convertir a número para buscar
-            try:
-                numero_corte = int(corte_seleccionado)
-            except ValueError:
-                numero_corte = corte_seleccionado  # Mantener como string si no es número
-            
-            # Obtener datos del corte seleccionado
-            try:
-                # Buscar en Talleres - convertir ambos a string para comparar
-                if "Número de Corte" in df_talleres.columns:
-                    # Convertir la columna a string para comparar
-                    df_talleres["Número de Corte_str"] = df_talleres["Número de Corte"].astype(str)
-                    corte_data = df_talleres[df_talleres["Número de Corte_str"] == str(corte_seleccionado)].iloc[0]
-                else:
-                    st.error("❌ No se encuentra la columna 'Número de Corte' en Talleres")
-                    st.write("Columnas disponibles en Talleres:", df_talleres.columns.tolist())
-                    st.stop()
-            except IndexError:
-                st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
-                st.write("Cortes disponibles en Talleres:", df_talleres["Número de Corte"].unique() if "Número de Corte" in df_talleres.columns else "No hay columna 'Número de Corte'")
-                st.stop()
-            
-            # Obtener información del corte original de la solapa Cortes
-            try:
-                if "Nro Corte" in df_cortes.columns:
-                    # Convertir a string para comparar
-                    df_cortes["Nro Corte_str"] = df_cortes["Nro Corte"].astype(str)
-                    corte_info = df_cortes[df_cortes["Nro Corte_str"] == str(corte_seleccionado)].iloc[0]
-                else:
-                    corte_info = None
-            except (IndexError, KeyError):
-                corte_info = None
-               
+      
+        st.markdown("---")
+        st.header("📦 Sistema de Entregas")
+        
+        # Filtrar cortes que están EN PRODUCCIÓN
+        if not df_talleres.empty and "Estado" in df_talleres.columns:
+            cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
+        else:
+            cortes_produccion = pd.DataFrame()
             # Mostrar información del corte
             st.markdown("---")
             st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
@@ -976,19 +950,8 @@ elif menu == "🏭 Talleres":
                 color = "🟡" if "PRODUCCIÓN" in estado else "🔴" if "FALTANTES" in estado or "FALLAS" in estado else "🔵"
                 st.metric("📊 Estado", f"{color} {estado}")
                 st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
-            
-        
-        
-        
-       
-        st.markdown("---")
-        st.header("📦 Sistema de Entregas")
-        
-        # Filtrar cortes que están EN PRODUCCIÓN
-        if not df_talleres.empty and "Estado" in df_talleres.columns:
-            cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
-        else:
-            cortes_produccion = pd.DataFrame()
+
+
         
         # --- ESTILOS CSS ---
         st.markdown("""
@@ -1449,6 +1412,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
