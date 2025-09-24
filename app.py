@@ -1002,53 +1002,80 @@ elif menu == "🏭 Talleres":
             except Exception as e:
                 st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
             
-            # Mostrar información del corte con estilo compacto
-            st.markdown('<div class="corte-info-compact">', unsafe_allow_html=True)
+            # Estilos CSS simples
+            st.markdown("""
+            <style>
+            .info-simple {
+                display: flex;
+                align-items: center;
+                margin: 8px 0;
+                font-size: 14px;
+            }
+            .info-icon-simple {
+                margin-right: 10px;
+                font-size: 16px;
+                width: 20px;
+            }
+            .info-label-simple {
+                color: #a0a0a0;
+                font-weight: normal;
+                margin-right: 5px;
+            }
+            .info-value-simple {
+                color: #ffffff;
+                font-weight: bold;
+            }
+            .estado-simple {
+                color: #4a8cff;
+                font-weight: bold;
+                margin-left: 5px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             
+            # Mostrar información simple sin cajas
             # Taller
             taller = corte_data.get("Taller", "N/A")
             st.markdown(f"""
-            <div class="info-row-compact">
-                <span class="info-icon">🏭</span>
-                <span class="info-label-compact">Taller:</span>
-                <span class="info-value-compact">{taller}</span>
+            <div class="info-simple">
+                <span class="info-icon-simple">🏭</span>
+                <span class="info-label-simple">Taller:</span>
+                <span class="info-value-simple">{taller}</span>
             </div>
             """, unsafe_allow_html=True)
             
             # Total de prendas
             st.markdown(f"""
-            <div class="info-row-compact">
-                <span class="info-icon">📏</span>
-                <span class="info-label-compact">Total Prendas:</span>
-                <span class="info-value-compact">{total_prendas}</span>
+            <div class="info-simple">
+                <span class="info-icon-simple">📏</span>
+                <span class="info-label-simple">Total Prendas:</span>
+                <span class="info-value-simple">{total_prendas}</span>
             </div>
             """, unsafe_allow_html=True)
             
             # Fecha de envío (solo fecha, sin hora)
             fecha_envio = corte_data.get("Fecha Envío", "N/A")
-            if isinstance(fecha_envio, str) and " " in fecha_envio:
+            if isinstance(fecha_envio, str):
+                # Limpiar la fecha - quitar hora si existe
                 fecha_envio = fecha_envio.split(" ")[0]  # Tomar solo la parte de la fecha
+                fecha_envio = fecha_envio.split("T")[0]  # Por si viene en formato ISO
             
             st.markdown(f"""
-            <div class="info-row-compact">
-                <span class="info-icon">📅</span>
-                <span class="info-label-compact">Fecha Envío:</span>
-                <span class="info-value-compact">{fecha_envio}</span>
+            <div class="info-simple">
+                <span class="info-icon-simple">📅</span>
+                <span class="info-label-simple">Fecha Envío:</span>
+                <span class="info-value-simple">{fecha_envio}</span>
             </div>
             """, unsafe_allow_html=True)
             
-            # Estado
+            # Estado con círculo azul
             st.markdown(f"""
-            <div class="info-row-compact">
-                <span class="info-icon">📊</span>
-                <span class="info-label-compact">Estado:</span>
-                <span class="info-value-compact">
-                    <span class="estado-badge-compact">EN PRODUCCIÓN</span>
-                </span>
+            <div class="info-simple">
+                <span class="info-icon-simple">📊</span>
+                <span class="info-label-simple">Estado:</span>
+                <span class="estado-simple">🔵 EN PRODUCCIÓN</span>
             </div>
             """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
             
             # --- REGISTRAR ENTREGA ---
             st.subheader("📤 Registrar Entrega")
@@ -1335,6 +1362,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
