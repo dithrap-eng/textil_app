@@ -355,6 +355,8 @@ elif menu == "✂ Cortes":
     talles = [5, 6, 7, 8, 9, 10]
     tabla_data = {}
     lineas = []
+    totales_x_color = []
+    totales_rollos = []
     
     if colores_sel:
         st.write("Complete las cantidades por color y talle:")
@@ -385,8 +387,12 @@ elif menu == "✂ Cortes":
                 valores_fila.append(val)
                 total_color += val
     
-            # Total automático de la fila
-            cols[-2].write(f"**{total_color}**")
+            # Total automático (alineado con inputs)
+            cols[-2].number_input(
+                f"total_color_{c}",
+                value=total_color,
+                disabled=True
+            )
     
             # Campo manual para rollos
             total_rollos = cols[-1].number_input(
@@ -400,19 +406,27 @@ elif menu == "✂ Cortes":
             tabla_data[c] = valores_fila
             lineas.append({"color": c, "rollos": total_rollos})
     
+            totales_x_color.append(total_color)
+            totales_rollos.append(total_rollos)
+    
         # Totales por columna (x talle)
         st.markdown("---")
         cols = st.columns(len(talles) + 3)
         cols[0].markdown("**Total x talle**")
         for j, t in enumerate(talles):
             suma_col = sum(tabla_data[c][j] for c in colores_sel)
-            cols[j+1].markdown(f"**{suma_col}**")
+            cols[j+1].markdown(f"<div style='background-color:#d1e7dd; padding:4px; border-radius:4px;'><b>{suma_col}</b></div>", unsafe_allow_html=True)
     
-        # Dejar vacíos los últimos 2 (no se suman Total x color ni Total rollos)
-        cols[-2].markdown("")
-        cols[-1].markdown("")
+        # Totales para columnas "Total x color" y "Total rollos"
+        suma_total_color = sum(totales_x_color)
+        suma_total_rollos = sum(totales_rollos)
+    
+        cols[-2].markdown(f"<div style='background-color:#f8d7da; padding:4px; border-radius:4px;'><b>{suma_total_color}</b></div>", unsafe_allow_html=True)
+        cols[-1].markdown(f"<div style='background-color:#cfe2ff; padding:4px; border-radius:4px;'><b>{suma_total_rollos}</b></div>", unsafe_allow_html=True)
+    
     else:
         st.info("Seleccione colores para habilitar la tabla de talles.")
+
 
 
 
@@ -1393,6 +1407,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
