@@ -389,7 +389,7 @@ elif menu == "✂ Cortes":
     
             # Total automático (alineado con inputs)
             cols[-2].number_input(
-                f"total_color_{c}",
+                f"total_{c}",
                 value=total_color,
                 disabled=True
             )
@@ -1407,6 +1407,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
