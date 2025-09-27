@@ -347,44 +347,62 @@ elif menu == "✂ Cortes":
 
     lineas = []
     
-    # Contenedor principal para colores con mejor diseño
-    with st.container():
-        st.subheader("📊 Gestión de Colores y Rollos")
-        
-        for i, c in enumerate(colores_sel):
-            # Crear un recuadro diferenciado para cada color
-            with st.expander(f"🎨 **{c}**", expanded=True):
-                # Dividir en columnas para mejor organización
-                col1, col2 = st.columns([2, 1])
-                
-                with col1:
-                    stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & 
-                                              (df_stock["Color"] == c)]["Rollos"].sum())
-                    
-                    # Mostrar stock con indicador visual
-                    if stock_color > 5:
-                        st.success(f"**Stock disponible:** {stock_color} rollos")
-                    elif stock_color > 2:
-                        st.warning(f"**Stock disponible:** {stock_color} rollos")
-                    else:
-                        st.error(f"**Stock disponible:** {stock_color} rollos")
-                
-                with col2:
-                    rollos_usados = st.number_input(
-                        f"Rollos consumidos", 
-                        min_value=0, 
-                        max_value=stock_color,
-                        step=1, 
-                        key=f"corte_{c}_{i}",
-                        help=f"Máximo disponible: {stock_color} rollos"
-                    )
-                
-                # Separador visual entre colores
-                if i < len(colores_sel) - 1:
-                    st.markdown("---")
-                
-                if rollos_usados > 0:
-                    lineas.append({"color": c, "rollos": rollos_usados})
+    # ================================
+    # GESTIÓN DE COLORES Y TALLES
+    # ================================
+    st.subheader("📊 Gestión de Colores y Talles")
+    
+    talles = [5, 6, 7, 8, 9, 10]
+    tabla_data = {}
+    lineas = []
+    
+    if colores_sel:
+        st.write("Complete las cantidades por color y talle:")
+    
+        # Encabezado
+        cols = st.columns(len(talles) + 2)  # +2 para "Color" y "Total fila"
+        cols[0].markdown("**Color**")
+        for j, t in enumerate(talles):
+            cols[j+1].markdown(f"**{t}**")
+        cols[-1].markdown("**Total fila**")
+    
+        # Filas dinámicas por color
+        for c in colores_sel:
+            valores_fila = []
+            total_fila = 0
+    
+            cols = st.columns(len(talles) + 2)
+            cols[0].write(f"🎨 {c}")
+    
+            for j, t in enumerate(talles):
+                val = cols[j+1].number_input(
+                    f"{c}_{t}",
+                    min_value=0,
+                    step=1,
+                    key=f"{c}_{t}"
+                )
+                valores_fila.append(val)
+                total_fila += val
+    
+            cols[-1].write(f"**{total_fila}**")
+    
+            # Guardar info en estructuras
+            tabla_data[c] = valores_fila
+            lineas.append({"color": c, "rollos": total_fila})
+    
+        # Totales por columna + general
+        st.markdown("---")
+        cols = st.columns(len(talles) + 2)
+        cols[0].markdown("**Total columna**")
+        total_general = 0
+        for j, t in enumerate(talles):
+            suma_col = sum(tabla_data[c][j] for c in colores_sel)
+            cols[j+1].markdown(f"**{suma_col}**")
+            total_general += suma_col
+        cols[-1].markdown(f"**{total_general}**")
+    else:
+        st.info("Seleccione colores para habilitar la tabla de talles.")
+
 
     # Sección de consumo y prendas
     st.markdown("---")
@@ -1362,6 +1380,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
