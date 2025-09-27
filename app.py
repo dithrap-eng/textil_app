@@ -350,58 +350,55 @@ elif menu == "✂ Cortes":
     # ================================
     # GESTIÓN DE COLORES Y TALLES
     # ================================
+    import pandas as pd
+    
+    # Ejemplo de talles
+    talles = [5, 6, 7, 8, 9, 10]
+    
     st.subheader("📊 Gestión de Colores y Talles")
     
-    talles = [5, 6, 7, 8, 9, 10]
+    # Diccionario para construir la tabla
     tabla_data = {}
-    lineas = []
     
-    if colores_sel:
-        st.write("Complete las cantidades por color y talle:")
+    for color in colores_sel:
+        tabla_data[color] = {}
+        
+        # Inputs por talle
+        for talle in talles:
+            tabla_data[color][talle] = st.number_input(
+                f"{color} - Talle {talle}",
+                min_value=0,
+                step=1,
+                key=f"{color}_{talle}"
+            )
+        
+        # Total automático de la fila (x color)
+        total_color = sum(tabla_data[color][talle] for talle in talles)
+        tabla_data[color]["Total x color"] = total_color
+        
+        # Campo manual de rollos
+        tabla_data[color]["Total rollos"] = st.number_input(
+            f"{color} - Total rollos",
+            min_value=0,
+            step=1,
+            key=f"rollos_{color}"
+        )
     
-        # Encabezado
-        cols = st.columns(len(talles) + 2)  # +2 para "Color" y "Total fila"
-        cols[0].markdown("**Color**")
-        for j, t in enumerate(talles):
-            cols[j+1].markdown(f"**{t}**")
-        cols[-1].markdown("**Total fila**")
+    # Pasar a DataFrame
+    df_tabla = pd.DataFrame(tabla_data).T.reset_index()
+    df_tabla = df_tabla.rename(columns={"index": "Color"})
     
-        # Filas dinámicas por color
-        for c in colores_sel:
-            valores_fila = []
-            total_fila = 0
+    # Fila total solo para talles
+    totales_talles = df_tabla[talles].sum().to_dict()
+    totales_talles["Color"] = "Total x talle"
+    totales_talles["Total x color"] = ""
+    totales_talles["Total rollos"] = ""
     
-            cols = st.columns(len(talles) + 2)
-            cols[0].write(f"🎨 {c}")
+    df_tabla = pd.concat([df_tabla, pd.DataFrame([totales_talles])], ignore_index=True)
     
-            for j, t in enumerate(talles):
-                val = cols[j+1].number_input(
-                    f"{c}_{t}",
-                    min_value=0,
-                    step=1,
-                    key=f"{c}_{t}"
-                )
-                valores_fila.append(val)
-                total_fila += val
-    
-            cols[-1].write(f"**{total_fila}**")
-    
-            # Guardar info en estructuras
-            tabla_data[c] = valores_fila
-            lineas.append({"color": c, "rollos": total_fila})
-    
-        # Totales por columna + general
-        st.markdown("---")
-        cols = st.columns(len(talles) + 2)
-        cols[0].markdown("**Total columna**")
-        total_general = 0
-        for j, t in enumerate(talles):
-            suma_col = sum(tabla_data[c][j] for c in colores_sel)
-            cols[j+1].markdown(f"**{suma_col}**")
-            total_general += suma_col
-        cols[-1].markdown(f"**{total_general}**")
-    else:
-        st.info("Seleccione colores para habilitar la tabla de talles.")
+    # Mostrar tabla
+    st.dataframe(df_tabla, use_container_width=True)
+
 
 
     # Sección de consumo y prendas
@@ -1380,6 +1377,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
