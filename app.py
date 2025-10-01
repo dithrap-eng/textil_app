@@ -176,16 +176,71 @@ if menu == "📥 Compras":
     total_metros = st.number_input("Total de metros de la compra", min_value=0.0, step=0.5)
 
     st.subheader("Colores y rollos")
+    
+    # Obtener colores existentes para sugerencias
+    @st.cache_data
+    def get_colores_existentes():
+        try:
+            df_stock = get_stock_resumen()
+            if not df_stock.empty and "Color" in df_stock.columns:
+                return sorted(df_stock["Color"].unique().tolist())
+            return []
+        except:
+            return []
+    
+    colores_existentes = get_colores_existentes()
+    
     lineas = []
     num_colores = st.number_input("Cantidad de colores", min_value=1, max_value=10, value=3, step=1)
+    
     for i in range(num_colores):
         col1, col2 = st.columns([2,1])
         with col1:
-            color = st.text_input(f"Color {i+1}")
+            # Usar selectbox con opciones existentes + posibilidad de nuevo color
+            opciones_colores = ["-- Nuevo color --"] + colores_existentes
+            seleccion_color = st.selectbox(
+                f"Color {i+1}", 
+                options=opciones_colores,
+                key=f"color_select_{i}"
+            )
+            
+            if seleccion_color == "-- Nuevo color --":
+                # Campo de texto para nuevo color con normalización
+                color_input = st.text_input(
+                    f"Escribir nuevo color {i+1}",
+                    key=f"color_input_{i}",
+                    placeholder="Ej: Rojo, Azul, Negro..."
+                )
+                color = color_input.strip()
+            else:
+                color = seleccion_color
+            
+            # Normalizar el color (primera letra mayúscula, resto minúsculas)
+            if color:
+                color = color.title().strip()
+                
         with col2:
             rollos = st.number_input(f"Rollos {i+1}", min_value=0, step=1, key=f"rollos_{i}")
+        
+        # Mostrar advertencia si el color ya existe con diferente escritura
+        if color and colores_existentes:
+            color_normalizado = color.title().strip()
+            colores_similares = [c for c in colores_existentes if c.lower() == color_normalizado.lower()]
+            if colores_similares and color_normalizado not in colores_similares:
+                st.warning(f"💡 Color similar existente: **{colores_similares[0]}**. Se usará: **{colores_similares[0]}**")
+                color = colores_similares[0]  # Usar el color existente
+        
         if color and rollos > 0:
             lineas.append({"color": color, "rollos": rollos})
+
+    # Mostrar resumen de colores normalizados
+    if lineas:
+        st.markdown("---")
+        st.subheader("🎨 Colores a registrar (normalizados)")
+        colores_finales = [l["color"] for l in lineas]
+        for color in set(colores_finales):  # Mostrar únicos
+            count = colores_finales.count(color)
+            st.write(f"• **{color}**: {count} variante(s)")
 
     # mostrar totales antes de confirmar
     if lineas and total_metros > 0 and precio_por_metro > 0:
@@ -195,8 +250,23 @@ if menu == "📥 Compras":
         st.info(f"💲 Total $: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     if st.button("💾 Guardar compra"):
-        insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
-        st.success("✅ Compra registrada")
+        # Validación final de colores duplicados
+        colores_unicos = set()
+        colores_duplicados = []
+        
+        for linea in lineas:
+            color_normalizado = linea["color"].title().strip()
+            if color_normalizado in colores_unicos:
+                colores_duplicados.append(color_normalizado)
+            colores_unicos.add(color_normalizado)
+        
+        if colores_duplicados:
+            st.error(f"❌ Colores duplicados detectados: {', '.join(set(colores_duplicados))}")
+            st.info("Por favor, corrija los colores duplicados antes de guardar")
+        else:
+            insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
+            st.success("✅ Compra registrada")
+            st.balloons()
 
     # -------------------------------
     # Resumen de compras
@@ -1451,6 +1521,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
