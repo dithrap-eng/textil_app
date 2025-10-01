@@ -362,18 +362,7 @@ elif menu == "✂ Cortes":
 
     lineas = []
     
-    # ================================
-    # 📦 COLORES USADOS (solo con stock > 1)
-    # ================================
-    st.subheader("🎨 Colores usados")
-    
-    ws = spreadsheet.worksheet("Stock")
-    stock_data = ws_stock.get_all_records()
-    
-    colores_disponibles = [
-        row["Color"] for row in stock_data if row["Rollos"] > 1
-    ]
-    colores_sel = st.multiselect("Seleccione los colores a usar:", colores_disponibles)
+
     
     # ================================
     # GESTIÓN DE COLORES Y TALLES
@@ -1462,6 +1451,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
