@@ -367,7 +367,7 @@ elif menu == "✂ Cortes":
     # ================================
     st.subheader("🎨 Colores usados")
     
-    sheet = connect_to_gsheets()
+
     ws_stock = sheet.worksheet("Stock")
     stock_data = ws_stock.get_all_records()
     
@@ -1448,6 +1448,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
