@@ -21,8 +21,8 @@ def init_connection():
     return client
 
 client = init_connection()
-# ←←← AGREGAR ESTA FUNCIÓN AQUÍ ←←←
-@st.cache_data(ttl=600)  # Cache por 10 minutos
+
+@st.cache_data(ttl=600)
 def cargar_datos(solapa):
     """
     Carga datos de una solapa específica de Google Sheets
@@ -48,8 +48,7 @@ def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros,
     total_valor = float(total_metros) * float(precio_por_metro)
     precio_promedio_rollo = total_valor / total_rollos if total_rollos > 0 else 0
 
-    compra_id = len(ws_compras.col_values(1))  # ID simple = nro de fila
-    # Guardamos como números puros (sin formato)
+    compra_id = len(ws_compras.col_values(1))
     ws_compras.append_row([
         compra_id, str(fecha), proveedor, tipo_tela,
         total_metros, precio_por_metro, total_rollos, total_valor, precio_promedio_rollo
@@ -74,7 +73,6 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     for l in lineas:
         ws_detalle.append_row([corte_id, l["color"], l["rollos"]])
 
-    # actualizar stock: restar rollos consumidos
     ws_detalle_compras = spreadsheet.worksheet("Detalle_Compras")
     data = ws_detalle_compras.get_all_records()
     df = pd.DataFrame(data)
@@ -82,11 +80,11 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     for l in lineas:
         idx = df[(df["Tipo de tela"] == tipo_tela) & (df["Color"] == l["color"])].index
         if not idx.empty:
-            row = idx[0] + 2  # compensar encabezado
+            row = idx[0] + 2
             new_value = int(df.loc[idx[0], "Rollos"]) - l["rollos"]
             if new_value < 0:
                 new_value = 0
-            ws_detalle_compras.update_cell(row, 4, new_value)  # col 4 = Rollos
+            ws_detalle_compras.update_cell(row, 4, new_value)
 
 # =====================
 # CONSULTAS
@@ -110,29 +108,25 @@ def get_compras_resumen():
 
 def get_proveedores():
     ws = spreadsheet.worksheet("Proveedores")
-    data = ws.col_values(1)[1:]  # saltear encabezado
+    data = ws.col_values(1)[1:]
     return data
 
 def update_stock(tipo_tela, color, nuevo_valor):
     ws = spreadsheet.worksheet("Stock")
-
     data = ws.get_all_records()
     headers = ws.row_values(1)
 
-    col_idx = headers.index("Rollos") + 1  # Ubicación de la columna "Rollos"
+    col_idx = headers.index("Rollos") + 1
 
-    for idx, row in enumerate(data, start=2):  # Empieza en fila 2
+    for idx, row in enumerate(data, start=2):
         if row["Tipo de tela"] == tipo_tela and row["Color"] == color:
             ws.update_cell(idx, col_idx, nuevo_valor)
             break
-
-
 
 def insert_proveedor(nombre):
     ws = spreadsheet.worksheet("Proveedores")
     ws.append_row([nombre])
 
-# Agregar estas funciones en la sección de consultas
 def get_cortes_resumen():
     try:
         ws_cortes = spreadsheet.worksheet("Cortes")
@@ -156,10 +150,10 @@ def get_talleres():
 # =====================
 st.set_page_config(page_title="Sistema Textil", layout="wide")
 
-# Actualizar el menú de navegación
+# Actualizar el menú de navegación - AGREGAR "📊 Resumen Compras"
 menu = st.sidebar.radio(
     "Navegación",
-    ["📥 Compras", "📦 Stock", "✂ Cortes", "🏭 Talleres", "👥 Proveedores"]
+    ["📥 Compras", "📊 Resumen Compras", "📦 Stock", "✂ Cortes", "🏭 Talleres", "👥 Proveedores"]
 )
 
 # -------------------------------
@@ -177,7 +171,6 @@ if menu == "📥 Compras":
 
     st.subheader("Colores y rollos")
     
-    # Obtener colores existentes para sugerencias
     @st.cache_data
     def get_colores_existentes():
         try:
@@ -196,18 +189,16 @@ if menu == "📥 Compras":
     for i in range(num_colores):
         col1, col2 = st.columns([2,1])
         with col1:
-            # Crear opciones: colores existentes + opción para nuevo color
             opciones_colores = colores_existentes + ["➕ Agregar nuevo color"]
             
             seleccion_color = st.selectbox(
                 f"Color {i+1}", 
                 options=opciones_colores,
-                index=0,  # Selecciona el primer color por defecto
+                index=0,
                 key=f"color_select_{i}",
                 help="Selecciona un color existente o 'Agregar nuevo color' para crear uno"
             )
             
-            # Si selecciona "Agregar nuevo color", mostrar campo de texto
             if seleccion_color == "➕ Agregar nuevo color":
                 color_nuevo = st.text_input(
                     f"Nuevo color {i+1}",
@@ -219,18 +210,15 @@ if menu == "📥 Compras":
             else:
                 color = seleccion_color
             
-            # Normalizar el color (primera letra mayúscula, resto minúsculas)
             if color and color != "➕ Agregar nuevo color":
                 color = color.title().strip()
                 
-                # Mostrar advertencia si el color nuevo es similar a uno existente
                 if seleccion_color == "➕ Agregar nuevo color" and colores_existentes:
                     colores_similares = [c for c in colores_existentes if c.lower() == color.lower()]
                     if colores_similares:
                         st.warning(f"💡 **Color similar existe**: '{colores_similares[0]}'. ¿Quieres usar el existente?")
                         
                         if st.button(f"Usar '{colores_similares[0]}'", key=f"usar_existente_{i}"):
-                            # Actualizar el selectbox para usar el color existente
                             color = colores_similares[0]
                             st.rerun()
         
@@ -240,23 +228,19 @@ if menu == "📥 Compras":
         if color and color != "➕ Agregar nuevo color" and rollos > 0:
             lineas.append({"color": color, "rollos": rollos})
 
-    # Mostrar resumen de colores normalizados
     if lineas:
         st.markdown("---")
         st.subheader("🎨 Resumen de colores a registrar")
         
-        # Agrupar colores iguales
         from collections import defaultdict
         resumen_colores = defaultdict(int)
         for linea in lineas:
             resumen_colores[linea["color"]] += linea["rollos"]
         
-        # Mostrar en orden alfabético
         for color in sorted(resumen_colores.keys()):
             total_rollos = resumen_colores[color]
             st.write(f"• **{color}**: {total_rollos} rollo{'s' if total_rollos > 1 else ''}")
 
-    # mostrar totales antes de confirmar
     if lineas and total_metros > 0 and precio_por_metro > 0:
         total_rollos = sum(l["rollos"] for l in lineas)
         total_valor = total_metros * precio_por_metro
@@ -268,7 +252,6 @@ if menu == "📥 Compras":
             st.info(f"💲 **Total compra**: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     if st.button("💾 Guardar compra", type="primary"):
-        # Validación final
         if not lineas:
             st.error("❌ Debe agregar al menos un color con rollos")
         elif total_metros <= 0:
@@ -276,7 +259,6 @@ if menu == "📥 Compras":
         elif precio_por_metro <= 0:
             st.error("❌ El precio por metro debe ser mayor a 0")
         else:
-            # Verificar colores duplicados (por si acaso)
             colores_unicos = set()
             colores_duplicados = []
             
@@ -293,200 +275,188 @@ if menu == "📥 Compras":
                 st.success("✅ Compra registrada exitosamente!")
                 st.balloons()
 
-    # -------------------------------
-    # RESUMEN DE COMPRAS
-    # -------------------------------
-    elif menu == "📊 Resumen Compras":
-        st.header("📊 Resumen de Compras")
-        
-        def get_compras_resumen():
-            try:
-                ws_compras = spreadsheet.worksheet("Compras")
-                data = ws_compras.get_all_records()
-                df = pd.DataFrame(data)
-                return df
-            except:
-                return pd.DataFrame()
-        
-        df_resumen = get_compras_resumen()
+# -------------------------------
+# RESUMEN DE COMPRAS (FUERA DEL BLOQUE ANTERIOR)
+# -------------------------------
+elif menu == "📊 Resumen Compras":
+    st.header("📊 Resumen de Compras")
     
-        if not df_resumen.empty:
-            # Convertir y limpiar datos
-            df_resumen["Total metros"] = pd.to_numeric(df_resumen["Total metros"], errors="coerce")
-            df_resumen["Precio por metro (USD)"] = pd.to_numeric(df_resumen["Precio por metro (USD)"], errors="coerce")
-            df_resumen["Rollos totales"] = pd.to_numeric(df_resumen["Rollos totales"], errors="coerce")
-            df_resumen["Total USD"] = pd.to_numeric(df_resumen["Total USD"], errors="coerce")
-            
-            # Convertir fecha si existe
+    df_resumen = get_compras_resumen()
+
+    if not df_resumen.empty:
+        # Convertir y limpiar datos
+        df_resumen["Total metros"] = pd.to_numeric(df_resumen["Total metros"], errors="coerce")
+        df_resumen["Precio por metro (USD)"] = pd.to_numeric(df_resumen["Precio por metro (USD)"], errors="coerce")
+        df_resumen["Rollos totales"] = pd.to_numeric(df_resumen["Rollos totales"], errors="coerce")
+        df_resumen["Total USD"] = pd.to_numeric(df_resumen["Total USD"], errors="coerce")
+        
+        # Convertir fecha si existe
+        if "Fecha" in df_resumen.columns:
+            df_resumen["Fecha"] = pd.to_datetime(df_resumen["Fecha"], errors='coerce')
+        
+        # Calcular precio promedio
+        df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
+        df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].fillna(0)
+        
+        # --- FILTROS ---
+        st.subheader("🔍 Filtros")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Filtro por fecha
             if "Fecha" in df_resumen.columns:
-                df_resumen["Fecha"] = pd.to_datetime(df_resumen["Fecha"], errors='coerce')
+                fechas_disponibles = df_resumen["Fecha"].dropna()
+                if not fechas_disponibles.empty:
+                    fecha_min = fechas_disponibles.min().date()
+                    fecha_max = fechas_disponibles.max().date()
+                    
+                    rango_fechas = st.date_input(
+                        "Rango de fechas",
+                        value=(fecha_min, fecha_max),
+                        min_value=fecha_min,
+                        max_value=fecha_max
+                    )
+        
+        with col2:
+            # Filtro por proveedor
+            if "Proveedor" in df_resumen.columns:
+                proveedores = sorted(df_resumen["Proveedor"].dropna().unique())
+                filtro_proveedor = st.multiselect(
+                    "Filtrar por proveedor",
+                    options=proveedores,
+                    placeholder="Todos los proveedores"
+                )
+        
+        # Aplicar filtros
+        df_filtrado = df_resumen.copy()
+        
+        if 'rango_fechas' in locals() and len(rango_fechas) == 2 and "Fecha" in df_filtrado.columns:
+            fecha_inicio, fecha_fin = rango_fechas
+            df_filtrado = df_filtrado[
+                (df_filtrado["Fecha"] >= pd.to_datetime(fecha_inicio)) & 
+                (df_filtrado["Fecha"] <= pd.to_datetime(fecha_fin))
+            ]
+        
+        if 'filtro_proveedor' in locals() and filtro_proveedor and "Proveedor" in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado["Proveedor"].isin(filtro_proveedor)]
+        
+        # Función para formatear en estilo argentino
+        def formato_argentino(valor, es_moneda=False):
+            if pd.isna(valor) or valor == 0:
+                return ""
+            formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            return f"USD {formatted}" if es_moneda else formatted
+        
+        # Preparar datos para mostrar
+        df_mostrar = df_filtrado.copy()
+        df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(formato_argentino)
+        df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(lambda x: formato_argentino(x, True))
+        df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(lambda x: formato_argentino(x, True))
+        df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(lambda x: formato_argentino(x, True))
+        df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].astype(int).astype(str)
+        
+        # Formatear fecha para mostrar
+        if "Fecha" in df_mostrar.columns:
+            df_mostrar["Fecha"] = df_mostrar["Fecha"].dt.strftime("%d/%m/%Y")
+        
+        # --- TABLA CON DETALLES ---
+        st.subheader("📋 Detalle de Compras")
+        
+        # Crear columnas para la tabla
+        columnas_mostrar = []
+        for col in ["Fecha", "Proveedor", "Tipo de tela", "Total metros", "Rollos totales", 
+                   "Precio por metro (USD)", "Total USD", "Precio promedio x rollo"]:
+            if col in df_mostrar.columns:
+                columnas_mostrar.append(col)
+        
+        # Mostrar tabla con filas clickeables
+        for idx, compra in df_mostrar[columnas_mostrar].iterrows():
+            with st.container():
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                
+                with col1:
+                    st.write(f"**{compra.get('Fecha', 'N/A')}**")
+                    st.write(f"*{compra.get('Proveedor', 'N/A')}*")
+                
+                with col2:
+                    st.write(f"**Tela:** {compra.get('Tipo de tela', 'N/A')}")
+                    st.write(f"**Metros:** {compra.get('Total metros', 'N/A')}")
+                
+                with col3:
+                    st.write(f"**Rollos:** {compra.get('Rollos totales', 'N/A')}")
+                    st.write(f"**Total:** {compra.get('Total USD', 'N/A')}")
+                
+                with col4:
+                    if st.button("📊 Detalles", key=f"detalles_{idx}"):
+                        st.session_state.compra_seleccionada = idx
+        
+        # --- MODAL DE DETALLES ---
+        if "compra_seleccionada" in st.session_state:
+            idx = st.session_state.compra_seleccionada
+            compra_original = df_filtrado.iloc[idx]
             
-            # Calcular precio promedio
-            df_resumen["Precio promedio x rollo"] = df_resumen["Total USD"] / df_resumen["Rollos totales"]
-            df_resumen["Precio promedio x rollo"] = df_resumen["Precio promedio x rollo"].fillna(0)
+            st.markdown("---")
+            st.subheader("📦 Detalles de la Compra")
             
-            # --- FILTROS ---
-            st.subheader("🔍 Filtros")
             col1, col2 = st.columns(2)
             
             with col1:
-                # Filtro por fecha
-                if "Fecha" in df_resumen.columns:
-                    fechas_disponibles = df_resumen["Fecha"].dropna()
-                    if not fechas_disponibles.empty:
-                        fecha_min = fechas_disponibles.min().date()
-                        fecha_max = fechas_disponibles.max().date()
-                        
-                        rango_fechas = st.date_input(
-                            "Rango de fechas",
-                            value=(fecha_min, fecha_max),
-                            min_value=fecha_min,
-                            max_value=fecha_max
-                        )
+                st.write(f"**Fecha:** {compra_original.get('Fecha', 'N/A')}")
+                st.write(f"**Proveedor:** {compra_original.get('Proveedor', 'N/A')}")
+                st.write(f"**Tipo de tela:** {compra_original.get('Tipo de tela', 'N/A')}")
             
             with col2:
-                # Filtro por proveedor
-                if "Proveedor" in df_resumen.columns:
-                    proveedores = sorted(df_resumen["Proveedor"].dropna().unique())
-                    filtro_proveedor = st.multiselect(
-                        "Filtrar por proveedor",
-                        options=proveedores,
-                        placeholder="Todos los proveedores"
-                    )
+                st.write(f"**Total metros:** {formato_argentino(compra_original.get('Total metros', 0))}")
+                st.write(f"**Total rollos:** {int(compra_original.get('Rollos totales', 0))}")
+                st.write(f"**Total compra:** {formato_argentino(compra_original.get('Total USD', 0), True)}")
             
-            # Aplicar filtros
-            df_filtrado = df_resumen.copy()
-            
-            if 'rango_fechas' in locals() and len(rango_fechas) == 2 and "Fecha" in df_filtrado.columns:
-                fecha_inicio, fecha_fin = rango_fechas
-                df_filtrado = df_filtrado[
-                    (df_filtrado["Fecha"] >= pd.to_datetime(fecha_inicio)) & 
-                    (df_filtrado["Fecha"] <= pd.to_datetime(fecha_fin))
-                ]
-            
-            if filtro_proveedor and "Proveedor" in df_filtrado.columns:
-                df_filtrado = df_filtrado[df_filtrado["Proveedor"].isin(filtro_proveedor)]
-            
-            # Función para formatear en estilo argentino
-            def formato_argentino(valor, es_moneda=False):
-                if pd.isna(valor) or valor == 0:
-                    return ""
-                formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                return f"USD {formatted}" if es_moneda else formatted
-            
-            # Preparar datos para mostrar
-            df_mostrar = df_filtrado.copy()
-            df_mostrar["Total metros"] = df_mostrar["Total metros"].apply(formato_argentino)
-            df_mostrar["Precio por metro (USD)"] = df_mostrar["Precio por metro (USD)"].apply(lambda x: formato_argentino(x, True))
-            df_mostrar["Total USD"] = df_mostrar["Total USD"].apply(lambda x: formato_argentino(x, True))
-            df_mostrar["Precio promedio x rollo"] = df_mostrar["Precio promedio x rollo"].apply(lambda x: formato_argentino(x, True))
-            df_mostrar["Rollos totales"] = df_mostrar["Rollos totales"].astype(int).astype(str)
-            
-            # Formatear fecha para mostrar
-            if "Fecha" in df_mostrar.columns:
-                df_mostrar["Fecha"] = df_mostrar["Fecha"].dt.strftime("%d/%m/%Y")
-            
-            # --- TABLA CON DETALLES ---
-            st.subheader("📋 Detalle de Compras")
-            
-            # Crear columnas para la tabla
-            columnas_mostrar = []
-            for col in ["Fecha", "Proveedor", "Tipo de tela", "Total metros", "Rollos totales", 
-                       "Precio por metro (USD)", "Total USD", "Precio promedio x rollo"]:
-                if col in df_mostrar.columns:
-                    columnas_mostrar.append(col)
-            
-            # Mostrar tabla con filas clickeables
-            for idx, compra in df_mostrar[columnas_mostrar].iterrows():
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                    
-                    with col1:
-                        st.write(f"**{compra.get('Fecha', 'N/A')}**")
-                        st.write(f"*{compra.get('Proveedor', 'N/A')}*")
-                    
-                    with col2:
-                        st.write(f"**Tela:** {compra.get('Tipo de tela', 'N/A')}")
-                        st.write(f"**Metros:** {compra.get('Total metros', 'N/A')}")
-                    
-                    with col3:
-                        st.write(f"**Rollos:** {compra.get('Rollos totales', 'N/A')}")
-                        st.write(f"**Total:** {compra.get('Total USD', 'N/A')}")
-                    
-                    with col4:
-                        if st.button("📊 Detalles", key=f"detalles_{idx}"):
-                            st.session_state.compra_seleccionada = idx
-            
-            # --- MODAL DE DETALLES ---
-            if "compra_seleccionada" in st.session_state:
-                idx = st.session_state.compra_seleccionada
-                compra_original = df_filtrado.iloc[idx]
-                
-                # Crear modal
-                st.markdown("---")
-                st.subheader("📦 Detalles de la Compra")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**Fecha:** {compra_original.get('Fecha', 'N/A')}")
-                    st.write(f"**Proveedor:** {compra_original.get('Proveedor', 'N/A')}")
-                    st.write(f"**Tipo de tela:** {compra_original.get('Tipo de tela', 'N/A')}")
-                
-                with col2:
-                    st.write(f"**Total metros:** {formato_argentino(compra_original.get('Total metros', 0))}")
-                    st.write(f"**Total rollos:** {int(compra_original.get('Rollos totales', 0))}")
-                    st.write(f"**Total compra:** {formato_argentino(compra_original.get('Total USD', 0), True)}")
-                
-                # Mostrar detalles de colores y rollos
-                st.markdown("---")
-                st.subheader("🎨 Distribución de Colores")
-                
-                # Extraer información de colores (asumiendo que está en columnas como "Colores" o similar)
-                if "Colores" in compra_original:
-                    try:
-                        # Intentar parsear colores si están en formato JSON o string
-                        import ast
-                        colores_info = ast.literal_eval(compra_original["Colores"])
-                        if isinstance(colores_info, list):
-                            for color_info in colores_info:
-                                if isinstance(color_info, dict) and "color" in color_info and "rollos" in color_info:
-                                    st.write(f"• **{color_info['color']}**: {color_info['rollos']} rollos")
-                        else:
-                            st.write(compra_original["Colores"])
-                    except:
-                        st.write(compra_original["Colores"])
-                else:
-                    st.info("No hay información detallada de colores para esta compra")
-                
-                # Botón para cerrar modal
-                if st.button("❌ Cerrar detalles"):
-                    del st.session_state.compra_seleccionada
-                    st.rerun()
-            
-            # --- ESTADÍSTICAS ---
             st.markdown("---")
-            st.subheader("📈 Resumen Estadístico")
+            st.subheader("🎨 Distribución de Colores")
             
-            if not df_filtrado.empty:
-                total_compras = len(df_filtrado)
-                total_inversion = df_filtrado["Total USD"].sum()
-                total_metros = df_filtrado["Total metros"].sum()
-                total_rollos = df_filtrado["Rollos totales"].sum()
+            # Aquí deberías obtener los detalles de colores de la compra específica
+            # Por ahora mostramos un mensaje informativo
+            st.info("La información detallada de colores por compra se mostrará aquí cuando esté implementada")
+            
+            if st.button("❌ Cerrar detalles"):
+                del st.session_state.compra_seleccionada
+                st.rerun()
+        
+        # --- ESTADÍSTICAS ---
+        st.markdown("---")
+        st.subheader("📈 Resumen Estadístico")
+        
+        if not df_filtrado.empty:
+            total_compras = len(df_filtrado)
+            total_inversion = df_filtrado["Total USD"].sum()
+            total_metros = df_filtrado["Total metros"].sum()
+            total_rollos = df_filtrado["Rollos totales"].sum()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("🛒 Compras", total_compras)
+            with col2:
+                st.metric("💰 Inversión Total", formato_argentino(total_inversion, True))
+            with col3:
+                st.metric("📏 Metros Totales", f"{total_metros:,.0f}")
+            with col4:
+                st.metric("📦 Rollos Totales", f"{total_rollos:,.0f}")
                 
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("🛒 Compras", total_compras)
-                with col2:
-                    st.metric("💰 Inversión Total", formato_argentino(total_inversion, True))
-                with col3:
-                    st.metric("📏 Metros Totales", f"{total_metros:,.0f}")
-                with col4:
-                    st.metric("📦 Rollos Totales", f"{total_rollos:,.0f}")
-                    
-        else:
-            st.info("No hay compras registradas aún.")
+    else:
+        st.info("No hay compras registradas aún.")
+
+# AGREGAR AQUÍ LAS OTRAS SECCIONES (Stock, Cortes, Talleres, Proveedores)
+elif menu == "📦 Stock":
+    st.header("📦 Stock - Por implementar")
+
+elif menu == "✂ Cortes":
+    st.header("✂ Cortes - Por implementar")
+
+elif menu == "🏭 Talleres":
+    st.header("🏭 Talleres - Por implementar")
+
+elif menu == "👥 Proveedores":
+    st.header("👥 Proveedores - Por implementar")
 
 
 # -------------------------------
@@ -1705,6 +1675,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
