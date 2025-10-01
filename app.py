@@ -127,6 +127,7 @@ def update_stock(tipo_tela, color, nuevo_valor):
             break
 
 
+
 def insert_proveedor(nombre):
     ws = spreadsheet.worksheet("Proveedores")
     ws.append_row([nombre])
@@ -1447,6 +1448,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
