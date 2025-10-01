@@ -113,6 +113,20 @@ def get_proveedores():
     data = ws.col_values(1)[1:]  # saltear encabezado
     return data
 
+def update_stock(tipo_tela, color, nuevo_valor):
+    ws = spreadsheet.worksheet("Stock")
+
+    data = ws.get_all_records()
+    headers = ws.row_values(1)
+
+    col_idx = headers.index("Rollos") + 1  # Ubicación de la columna "Rollos"
+
+    for idx, row in enumerate(data, start=2):  # Empieza en fila 2
+        if row["Tipo de tela"] == tipo_tela and row["Color"] == color:
+            ws.update_cell(idx, col_idx, nuevo_valor)
+            break
+
+
 def insert_proveedor(nombre):
     ws = spreadsheet.worksheet("Proveedores")
     ws.append_row([nombre])
@@ -1434,6 +1448,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
