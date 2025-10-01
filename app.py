@@ -637,12 +637,27 @@ elif menu == "✂ Cortes":
     telas = df_stock["Tipo de tela"].unique() if not df_stock.empty else []
     tipo_tela = st.selectbox("Tela usada", telas if len(telas) else ["---"])
 
-    colores = df_stock[df_stock["Tipo de tela"] == tipo_tela]["Color"].unique() if len(df_stock) else []
-    colores_sel = st.multiselect("Colores usados", colores)
+    # --- MODIFICACIÓN: Filtrar colores con stock > 0 ---
+    if not df_stock.empty and tipo_tela != "---":
+        # Filtrar por tipo de tela y stock mayor a 0
+        stock_tela = df_stock[df_stock["Tipo de tela"] == tipo_tela]
+        colores_con_stock = stock_tela[stock_tela["Rollos"] > 0]["Color"].unique()
+        colores_sin_stock = stock_tela[stock_tela["Rollos"] == 0]["Color"].unique()
+    else:
+        colores_con_stock = []
+        colores_sin_stock = []
+
+    colores_sel = st.multiselect(
+        "Colores usados", 
+        colores_con_stock,
+        help="Solo se muestran colores con stock disponible"
+    )
+
+    # Mostrar información sobre colores sin stock
+    if len(colores_sin_stock) > 0:
+        st.info(f"ℹ️ Colores sin stock disponible: {', '.join(colores_sin_stock)}")
 
     lineas = []
-    
-
     
     # ================================
     # GESTIÓN DE COLORES Y TALLES
@@ -749,11 +764,10 @@ elif menu == "✂ Cortes":
         )
     
     else:
-        st.info("Seleccione colores para habilitar la tabla de talles.")
-
-
-
-
+        if tipo_tela != "---" and len(colores_con_stock) == 0:
+            st.warning("⚠️ No hay colores con stock disponible para la tela seleccionada")
+        else:
+            st.info("Seleccione colores para habilitar la tabla de talles.")
 
     # Sección de consumo y prendas
     st.markdown("---")
@@ -1731,6 +1745,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
