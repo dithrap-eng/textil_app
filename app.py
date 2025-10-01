@@ -322,9 +322,10 @@ elif menu == "📊 Resumen Compras":
         # Aplicar formato a las columnas numéricas
         df_mostrar = df_compras.copy()
         
-        # Seleccionar y ordenar columnas para mostrar
+        # Seleccionar y ordenar columnas para mostrar - AGREGAR ID PRIMERO
         columnas_mostrar = []
         mapeo_columnas = {
+            "ID": "ID Compra",  # AGREGADO: Mostrar ID de compra
             "Fecha": "Fecha",
             "Proveedor": "Proveedor", 
             "Tipo de tela": "Tipo de Tela",
@@ -356,14 +357,23 @@ elif menu == "📊 Resumen Compras":
         st.subheader("🎨 Detalles de Colores por Compra")
         
         if not df_detalle.empty and "ID Compra" in df_detalle.columns:
-            # Seleccionar una compra para ver detalles
-            compras_ids = sorted(df_compras["ID"].unique()) if "ID" in df_compras.columns else []
+            # Crear lista de compras con ID + Tipo de Tela para mejor identificación
+            compras_con_info = []
+            for compra_id in df_compras["ID"].unique():
+                tipo_tela = df_compras[df_compras["ID"] == compra_id]["Tipo de tela"].iloc[0] if "Tipo de tela" in df_compras.columns else "N/A"
+                compras_con_info.append({
+                    "id": compra_id,
+                    "display": f"ID: {compra_id} - {tipo_tela}"
+                })
             
-            if compras_ids:
+            # Ordenar por ID descendente (más reciente primero)
+            compras_con_info.sort(key=lambda x: x["id"], reverse=True)
+            
+            if compras_con_info:
                 compra_seleccionada = st.selectbox(
                     "Selecciona una compra para ver los detalles de colores:",
-                    options=compras_ids,
-                    format_func=lambda x: f"Compra ID: {x}"
+                    options=[c["id"] for c in compras_con_info],
+                    format_func=lambda x: next((c["display"] for c in compras_con_info if c["id"] == x), f"ID: {x}")
                 )
                 
                 # Filtrar detalles de la compra seleccionada
@@ -374,12 +384,14 @@ elif menu == "📊 Resumen Compras":
                     info_compra = df_compras[df_compras["ID"] == compra_seleccionada].iloc[0]
                     
                     # Mostrar información general de la compra
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.write(f"**Proveedor:** {info_compra.get('Proveedor', 'N/A')}")
+                        st.write(f"**ID Compra:** {compra_seleccionada}")
                     with col2:
-                        st.write(f"**Tipo de Tela:** {info_compra.get('Tipo de tela', 'N/A')}")
+                        st.write(f"**Proveedor:** {info_compra.get('Proveedor', 'N/A')}")
                     with col3:
+                        st.write(f"**Tipo de Tela:** {info_compra.get('Tipo de tela', 'N/A')}")
+                    with col4:
                         st.write(f"**Fecha:** {info_compra.get('Fecha', 'N/A')}")
                     
                     # Mostrar tabla de colores
@@ -427,19 +439,6 @@ elif menu == "📊 Resumen Compras":
             
     else:
         st.info("No hay compras registradas aún.")
-
-# AGREGAR AQUÍ LAS OTRAS SECCIONES
-elif menu == "📦 Stock":
-    st.header("📦 Stock - Por implementar")
-
-elif menu == "✂ Cortes":
-    st.header("✂ Cortes - Por implementar")
-
-elif menu == "🏭 Talleres":
-    st.header("🏭 Talleres - Por implementar")
-
-elif menu == "👥 Proveedores":
-    st.header("👥 Proveedores - Por implementar")
 
 
 # -------------------------------
@@ -1658,6 +1657,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
