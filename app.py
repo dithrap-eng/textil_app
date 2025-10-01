@@ -183,7 +183,7 @@ if menu == "📥 Compras":
         try:
             df_stock = get_stock_resumen()
             if not df_stock.empty and "Color" in df_stock.columns:
-                return sorted(df_stock["Color"].unique().tolist())
+                return sorted(df_stock["Color"].dropna().unique().tolist())
             return []
         except:
             return []
@@ -196,77 +196,102 @@ if menu == "📥 Compras":
     for i in range(num_colores):
         col1, col2 = st.columns([2,1])
         with col1:
-            # Usar selectbox con opciones existentes + posibilidad de nuevo color
-            opciones_colores = ["-- Nuevo color --"] + colores_existentes
+            # Crear opciones: colores existentes + opción para nuevo color
+            opciones_colores = colores_existentes + ["➕ Agregar nuevo color"]
+            
             seleccion_color = st.selectbox(
                 f"Color {i+1}", 
                 options=opciones_colores,
-                key=f"color_select_{i}"
+                index=0,  # Selecciona el primer color por defecto
+                key=f"color_select_{i}",
+                help="Selecciona un color existente o 'Agregar nuevo color' para crear uno"
             )
             
-            if seleccion_color == "-- Nuevo color --":
-                # Campo de texto para nuevo color con normalización
-                color_input = st.text_input(
-                    f"Escribir nuevo color {i+1}",
-                    key=f"color_input_{i}",
-                    placeholder="Ej: Rojo, Azul, Negro..."
+            # Si selecciona "Agregar nuevo color", mostrar campo de texto
+            if seleccion_color == "➕ Agregar nuevo color":
+                color_nuevo = st.text_input(
+                    f"Nuevo color {i+1}",
+                    key=f"color_nuevo_{i}",
+                    placeholder="Escribe el nombre del nuevo color...",
+                    help="El color se guardará con formato 'Primera Mayúscula'"
                 )
-                color = color_input.strip()
+                color = color_nuevo.strip()
             else:
                 color = seleccion_color
             
             # Normalizar el color (primera letra mayúscula, resto minúsculas)
-            if color:
+            if color and color != "➕ Agregar nuevo color":
                 color = color.title().strip()
                 
+                # Mostrar advertencia si el color nuevo es similar a uno existente
+                if seleccion_color == "➕ Agregar nuevo color" and colores_existentes:
+                    colores_similares = [c for c in colores_existentes if c.lower() == color.lower()]
+                    if colores_similares:
+                        st.warning(f"💡 **Color similar existe**: '{colores_similares[0]}'. ¿Quieres usar el existente?")
+                        
+                        if st.button(f"Usar '{colores_similares[0]}'", key=f"usar_existente_{i}"):
+                            # Actualizar el selectbox para usar el color existente
+                            color = colores_similares[0]
+                            st.rerun()
+        
         with col2:
             rollos = st.number_input(f"Rollos {i+1}", min_value=0, step=1, key=f"rollos_{i}")
         
-        # Mostrar advertencia si el color ya existe con diferente escritura
-        if color and colores_existentes:
-            color_normalizado = color.title().strip()
-            colores_similares = [c for c in colores_existentes if c.lower() == color_normalizado.lower()]
-            if colores_similares and color_normalizado not in colores_similares:
-                st.warning(f"💡 Color similar existente: **{colores_similares[0]}**. Se usará: **{colores_similares[0]}**")
-                color = colores_similares[0]  # Usar el color existente
-        
-        if color and rollos > 0:
+        if color and color != "➕ Agregar nuevo color" and rollos > 0:
             lineas.append({"color": color, "rollos": rollos})
 
     # Mostrar resumen de colores normalizados
     if lineas:
         st.markdown("---")
-        st.subheader("🎨 Colores a registrar (normalizados)")
-        colores_finales = [l["color"] for l in lineas]
-        for color in set(colores_finales):  # Mostrar únicos
-            count = colores_finales.count(color)
-            st.write(f"• **{color}**: {count} variante(s)")
+        st.subheader("🎨 Resumen de colores a registrar")
+        
+        # Agrupar colores iguales
+        from collections import defaultdict
+        resumen_colores = defaultdict(int)
+        for linea in lineas:
+            resumen_colores[linea["color"]] += linea["rollos"]
+        
+        # Mostrar en orden alfabético
+        for color in sorted(resumen_colores.keys()):
+            total_rollos = resumen_colores[color]
+            st.write(f"• **{color}**: {total_rollos} rollo{'s' if total_rollos > 1 else ''}")
 
     # mostrar totales antes de confirmar
     if lineas and total_metros > 0 and precio_por_metro > 0:
         total_rollos = sum(l["rollos"] for l in lineas)
         total_valor = total_metros * precio_por_metro
-        st.info(f"📦 Total rollos cargados: {total_rollos}")
-        st.info(f"💲 Total $: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"📦 **Total rollos**: {total_rollos}")
+        with col2:
+            st.info(f"💲 **Total compra**: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    if st.button("💾 Guardar compra"):
-        # Validación final de colores duplicados
-        colores_unicos = set()
-        colores_duplicados = []
-        
-        for linea in lineas:
-            color_normalizado = linea["color"].title().strip()
-            if color_normalizado in colores_unicos:
-                colores_duplicados.append(color_normalizado)
-            colores_unicos.add(color_normalizado)
-        
-        if colores_duplicados:
-            st.error(f"❌ Colores duplicados detectados: {', '.join(set(colores_duplicados))}")
-            st.info("Por favor, corrija los colores duplicados antes de guardar")
+    if st.button("💾 Guardar compra", type="primary"):
+        # Validación final
+        if not lineas:
+            st.error("❌ Debe agregar al menos un color con rollos")
+        elif total_metros <= 0:
+            st.error("❌ El total de metros debe ser mayor a 0")
+        elif precio_por_metro <= 0:
+            st.error("❌ El precio por metro debe ser mayor a 0")
         else:
-            insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
-            st.success("✅ Compra registrada")
-            st.balloons()
+            # Verificar colores duplicados (por si acaso)
+            colores_unicos = set()
+            colores_duplicados = []
+            
+            for linea in lineas:
+                color_normalizado = linea["color"]
+                if color_normalizado in colores_unicos:
+                    colores_duplicados.append(color_normalizado)
+                colores_unicos.add(color_normalizado)
+            
+            if colores_duplicados:
+                st.error(f"❌ Colores duplicados: {', '.join(set(colores_duplicados))}")
+            else:
+                insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
+                st.success("✅ Compra registrada exitosamente!")
+                st.balloons()
 
     # -------------------------------
     # Resumen de compras
@@ -1521,6 +1546,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
