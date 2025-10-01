@@ -180,7 +180,67 @@ if menu == "📥 Compras":
     fecha = st.date_input("Fecha", value=date.today())
     proveedores = get_proveedores()
     proveedor = st.selectbox("Proveedor", proveedores if proveedores else ["---"])
-    tipo_tela = st.text_input("Tipo de tela")
+    
+    # --- NUEVA SECCIÓN: TIPO DE TELA CON UNIFICACIÓN ---
+    st.subheader("Tipo de Tela")
+    
+    @st.cache_data
+    def get_telas_existentes():
+        """
+        Obtiene los tipos de tela existentes de las compras anteriores
+        """
+        try:
+            df_compras = get_compras_resumen()
+            if not df_compras.empty and "Tipo de tela" in df_compras.columns:
+                return sorted(df_compras["Tipo de tela"].dropna().unique().tolist())
+            return []
+        except:
+            return []
+    
+    telas_existentes = get_telas_existentes()
+    
+    # Selector para tipo de tela con opción de agregar nuevo
+    opciones_telas = telas_existentes + ["➕ Agregar nuevo tipo de tela"]
+    
+    seleccion_tela = st.selectbox(
+        "Tipo de tela", 
+        options=opciones_telas,
+        index=0,
+        help="Selecciona un tipo de tela existente o 'Agregar nuevo' para crear uno"
+    )
+    
+    if seleccion_tela == "➕ Agregar nuevo tipo de tela":
+        tela_nueva = st.text_input(
+            "Nuevo tipo de tela",
+            placeholder="Escribe el nombre del nuevo tipo de tela...",
+            help="El tipo de tela se guardará con formato 'Primera Mayúscula'"
+        )
+        tipo_tela = tela_nueva.strip()
+    else:
+        tipo_tela = seleccion_tela
+    
+    # Normalizar el tipo de tela (primera letra mayúscula, resto minúsculas)
+    if tipo_tela and tipo_tela != "➕ Agregar nuevo tipo de tela":
+        tipo_tela = tipo_tela.title().strip()
+        
+        # Mostrar advertencia si el tipo de tela nuevo es similar a uno existente
+        if seleccion_tela == "➕ Agregar nuevo tipo de tela" and telas_existentes:
+            telas_similares = [t for t in telas_existentes if t.lower() == tipo_tela.lower()]
+            if telas_similares:
+                st.warning(f"💡 **Tipo de tela similar existe**: '{telas_similares[0]}'. ¿Quieres usar el existente?")
+                
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if st.button(f"Usar '{telas_similares[0]}'", key="usar_tela_existente"):
+                        tipo_tela = telas_similares[0]
+                        st.rerun()
+                with col2:
+                    st.info("Si continúas con el nuevo nombre, se creará como un tipo de tela diferente.")
+    
+    # Mostrar el tipo de tela que se va a registrar
+    if tipo_tela and tipo_tela != "➕ Agregar nuevo tipo de tela":
+        st.info(f"🎯 **Tipo de tela a registrar:** {tipo_tela}")
+    
     precio_por_metro = st.number_input("Precio por metro (USD)", min_value=0.0, step=0.5)
     total_metros = st.number_input("Total de metros de la compra", min_value=0.0, step=0.5)
 
@@ -256,24 +316,38 @@ if menu == "📥 Compras":
             total_rollos = resumen_colores[color]
             st.write(f"• **{color}**: {total_rollos} rollo{'s' if total_rollos > 1 else ''}")
 
-    if lineas and total_metros > 0 and precio_por_metro > 0:
+    # Mostrar resumen completo antes de guardar
+    if tipo_tela and tipo_tela != "➕ Agregar nuevo tipo de tela" and lineas and total_metros > 0 and precio_por_metro > 0:
         total_rollos = sum(l["rollos"] for l in lineas)
         total_valor = total_metros * precio_por_metro
         
+        st.markdown("---")
+        st.subheader("📋 Resumen Final de la Compra")
+        
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"📦 **Total rollos**: {total_rollos}")
+            st.write(f"**Tipo de Tela:** {tipo_tela}")
+            st.write(f"**Proveedor:** {proveedor}")
+            st.write(f"**Fecha:** {fecha}")
         with col2:
-            st.info(f"💲 **Total compra**: USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.write(f"**Total metros:** {total_metros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.write(f"**Precio por metro:** USD {precio_por_metro:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.write(f"**Total rollos:** {total_rollos}")
+        
+        st.info(f"💲 **Valor total de la compra:** USD {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     if st.button("💾 Guardar compra", type="primary"):
-        if not lineas:
+        # Validación final
+        if not tipo_tela or tipo_tela == "➕ Agregar nuevo tipo de tela":
+            st.error("❌ Debe seleccionar o ingresar un tipo de tela válido")
+        elif not lineas:
             st.error("❌ Debe agregar al menos un color con rollos")
         elif total_metros <= 0:
             st.error("❌ El total de metros debe ser mayor a 0")
         elif precio_por_metro <= 0:
             st.error("❌ El precio por metro debe ser mayor a 0")
         else:
+            # Verificar colores duplicados
             colores_unicos = set()
             colores_duplicados = []
             
@@ -1657,6 +1731,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
