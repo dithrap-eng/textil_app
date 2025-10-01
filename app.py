@@ -362,7 +362,21 @@ elif menu == "✂ Cortes":
     lineas = []
     
     # ================================
-    # GESTIÓN DE COLORES Y TALLES
+    # 📦 COLORES USADOS (solo con stock > 1)
+    # ================================
+    st.subheader("🎨 Colores usados")
+    
+    sheet = connect_to_gsheets()
+    ws_stock = sheet.worksheet("Stock")
+    stock_data = ws_stock.get_all_records()
+    
+    colores_disponibles = [
+        row["Color"] for row in stock_data if row["Rollos"] > 1
+    ]
+    colores_sel = st.multiselect("Seleccione los colores a usar:", colores_disponibles)
+    
+    # ================================
+    # 📊 GESTIÓN DE COLORES Y TALLES
     # ================================
     st.subheader("📊 Gestión de Colores y Talles")
     
@@ -370,102 +384,87 @@ elif menu == "✂ Cortes":
     tabla_data = {}
     lineas = []
     
-    df_stock = get_stock_resumen()  # Stock actual desde Sheets
-    
     if colores_sel:
         st.write("Complete las cantidades por color y talle:")
     
-        # Encabezado de tabla
-        cols = st.columns(len(talles) + 3)  # +3 = Color | Total x color | Total rollos
+        # Encabezado
+        cols = st.columns(len(talles) + 3)  # Color + talles + Total x color + Total rollos
         cols[0].markdown("**Color**")
         for j, t in enumerate(talles):
             cols[j+1].markdown(f"**{t}**")
         cols[-2].markdown("**Total x color**")
         cols[-1].markdown("**Total rollos**")
     
-        # Filas dinámicas por color
+        total_x_color_sum = 0
+        total_rollos_sum = 0
+    
+        # Filas dinámicas
         for c in colores_sel:
+            # Buscar stock del color
+            stock_color = next(
+                (row["Rollos"] for row in stock_data if row["Color"] == c), 0
+            )
+    
             valores_fila = []
             total_fila = 0
-    
             cols = st.columns(len(talles) + 3)
-            cols[0].write(f"🎨 {c}")
     
-            # Stock actual de este color
-            stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) &
-                                       (df_stock["Color"] == c)]["Rollos"].sum())
+            # Mostrar nombre + stock con indicador
             if stock_color > 5:
-                cols[0].success(f"Stock: {stock_color}")
+                cols[0].success(f"{c} (Stock: {stock_color})")
             elif stock_color > 2:
-                cols[0].warning(f"Stock: {stock_color}")
+                cols[0].warning(f"{c} (Stock: {stock_color})")
             else:
-                cols[0].error(f"Stock: {stock_color}")
+                cols[0].error(f"{c} (Stock: {stock_color})")
     
-            # Campos de talles
+            # Ingresar talles
             for j, t in enumerate(talles):
                 val = cols[j+1].number_input(
-                    f"{c}_{t}",
-                    min_value=0,
-                    step=1,
-                    key=f"{c}_{t}"
+                    f"{c}_{t}", min_value=0, step=1, key=f"{c}_{t}"
                 )
                 valores_fila.append(val)
                 total_fila += val
     
-            # Total x color (solo lectura)
+            # Total x color
             cols[-2].markdown(f"**{total_fila}**")
     
-            # Total rollos consumidos (editable, afecta stock)
-            total_rollos = cols[-1].number_input(
-                f"Total rollos {c}",
-                min_value=0,
-                max_value=stock_color,
-                step=1,
-                key=f"rollos_{c}"
+            # Total rollos a consumir
+            rollos_usados = cols[-1].number_input(
+                f"Rollos {c}", min_value=0, max_value=stock_color,
+                step=1, key=f"rollos_{c}"
             )
     
-            # Guardar datos
+            # Actualizar totales generales
+            total_x_color_sum += total_fila
+            total_rollos_sum += rollos_usados
+    
+            # Guardar en estructuras
             tabla_data[c] = valores_fila
-            lineas.append({"color": c, "rollos": total_rollos})
+            lineas.append({"color": c, "talles": valores_fila,
+                           "total_color": total_fila, "rollos": rollos_usados})
     
-        # Totales por columna
+            # Descontar stock en Google Sheets si se usaron rollos
+            if rollos_usados > 0:
+                nuevo_stock = stock_color - rollos_usados
+                update_stock("Tela X", c, nuevo_stock)  # 👈 ajustar "Tela X" según columna
+                # Registrar en hoja Consumos
+                ws_consumos = sheet.worksheet("Consumos")
+                ws_consumos.append_row([c, rollos_usados])
+    
+        # ================================
+        # 📌 Totales Generales
+        # ================================
         st.markdown("---")
-        cols = st.columns(len(talles) + 3)
-        cols[0].markdown("**Total x talle**")
-        for j, t in enumerate(talles):
-            suma_col = sum(tabla_data[c][j] for c in colores_sel)
-            cols[j+1].markdown(f"**{suma_col}**")
-        cols[-2].markdown("**—**")
-        suma_rollos = sum(item["rollos"] for item in lineas)
-        cols[-1].markdown(f"**{suma_rollos}**")
-    
-        # Botón para guardar
-        if st.button("💾 Guardar corte"):
-            for c in colores_sel:
-                rollos_consumidos = st.session_state.get(f"rollos_{c}", 0)
-                if rollos_consumidos > 0:
-                    # Registrar corte
-                    insert_corte(
-                        fecha,
-                        nro_corte,
-                        articulo,
-                        tipo_tela,
-                        [{"color": c, "rollos": rollos_consumidos}],
-                        consumo_total,
-                        prendas,
-                        consumo_x_prenda
-                    )
-    
-                    # Actualizar stock
-                    stock_actual = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) &
-                                                (df_stock["Color"] == c)]["Rollos"].sum())
-                    nuevo_stock = stock_actual - rollos_consumidos
-                    update_stock(tipo_tela, c, nuevo_stock)
-    
-            st.success("✅ Corte registrado y stock actualizado")
-    
+        st.markdown(
+            f"<div style='background:#004080;color:white;padding:10px;border-radius:8px;'>"
+            f"🔹 **Total general (colores): {total_x_color_sum}**<br>"
+            f"🔸 **Total general (rollos): {total_rollos_sum}**"
+            f"</div>",
+            unsafe_allow_html=True
+        )
     else:
         st.info("Seleccione colores para habilitar la tabla de talles.")
+
 
 
 
@@ -1448,6 +1447,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
