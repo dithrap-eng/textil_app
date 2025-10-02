@@ -1047,6 +1047,10 @@ elif menu == "🏭 Talleres":
     # Obtener lista de talleres
     talleres_existentes = get_nombre_talleres()
     
+    # Estado para controlar la adición de nuevos talleres
+    if 'nuevos_talleres' not in st.session_state:
+        st.session_state.nuevos_talleres = {}
+    
     if not df_cortes.empty:
         # Crear o obtener worksheet de talleres
         try:
@@ -1135,8 +1139,9 @@ elif menu == "🏭 Talleres":
                     with cols[3]:
                         st.write(row['Tipo de tela'])
                     with cols[4]:
-                        # Selectbox para taller con opción de agregar nuevo
-                        opciones_taller = talleres_existentes + ["➕ Agregar nuevo taller"]
+                        # Combinar talleres existentes con los nuevos agregados en esta sesión
+                        todos_talleres = talleres_existentes + list(st.session_state.nuevos_talleres.keys())
+                        opciones_taller = sorted(list(set(todos_talleres))) + ["➕ Agregar nuevo taller"]
                         
                         seleccion_taller = st.selectbox(
                             f"Taller_{i}",
@@ -1154,17 +1159,9 @@ elif menu == "🏭 Talleres":
                                 key=f"nuevo_taller_{i}",
                                 label_visibility="collapsed"
                             )
-                            if nuevo_taller.strip():
-                                # Agregar el nuevo taller a la lista y seleccionarlo
-                                if nuevo_taller not in talleres_existentes:
-                                    success, message = agregar_nuevo_taller(nuevo_taller.strip())
-                                    if success:
-                                        st.success(f"✅ {message}")
-                                        talleres_existentes.append(nuevo_taller.strip())
-                                        talleres_existentes.sort()
-                                        st.rerun()
-                                    else:
-                                        st.error(f"❌ {message}")
+                            if nuevo_taller and nuevo_taller.strip():
+                                # Guardar temporalmente en session_state
+                                st.session_state.nuevos_talleres[nuevo_taller.strip()] = True
                                 taller = nuevo_taller.strip()
                             else:
                                 taller = ""
@@ -1186,6 +1183,28 @@ elif menu == "🏭 Talleres":
                         df_editable.at[i, "Asignar"] = asignar
                 
                 st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Botón para agregar nuevos talleres permanentemente
+                if st.session_state.nuevos_talleres:
+                    st.warning("⚠️ **Talleres nuevos pendientes de guardar:**")
+                    for nuevo_taller in st.session_state.nuevos_talleres.keys():
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"• {nuevo_taller}")
+                        with col2:
+                            if st.button(f"💾 Guardar", key=f"guardar_{nuevo_taller}"):
+                                success, message = agregar_nuevo_taller(nuevo_taller)
+                                if success:
+                                    st.success(f"✅ {message}")
+                                    # Actualizar la lista de talleres existentes
+                                    talleres_existentes.append(nuevo_taller)
+                                    talleres_existentes.sort()
+                                    # Remover del estado temporal
+                                    del st.session_state.nuevos_talleres[nuevo_taller]
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
                 
                 # Botón verde para asignar
                 if st.form_submit_button("🚀 Asignar Cortes Seleccionados", type="primary"):
@@ -1811,6 +1830,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
