@@ -1025,31 +1025,12 @@ elif menu == "🏭 Talleres":
             st.error(f"Error al cargar talleres: {str(e)}")
             return []
     
-    # Función para agregar nuevo taller
-    def agregar_nuevo_taller(nombre_taller):
-        try:
-            ws_talleres = spreadsheet.worksheet("Nombre_talleres")
-            # Verificar si el taller ya existe
-            talleres_existentes = get_nombre_talleres()
-            if nombre_taller in talleres_existentes:
-                return False, "El taller ya existe"
-            
-            # Agregar nuevo taller
-            ws_talleres.append_row([nombre_taller])
-            return True, "Taller agregado exitosamente"
-        except Exception as e:
-            return False, f"Error al agregar taller: {str(e)}"
-    
     # Cargar todos los datos necesarios
     df_cortes = get_cortes_resumen()
     df_historial = cargar_datos("Historial_Entregas")
     
     # Obtener lista de talleres
     talleres_existentes = get_nombre_talleres()
-    
-    # Estado para controlar la adición de nuevos talleres
-    if 'nuevos_talleres' not in st.session_state:
-        st.session_state.nuevos_talleres = {}
     
     if not df_cortes.empty:
         # Crear o obtener worksheet de talleres
@@ -1139,35 +1120,14 @@ elif menu == "🏭 Talleres":
                     with cols[3]:
                         st.write(row['Tipo de tela'])
                     with cols[4]:
-                        # Combinar talleres existentes con los nuevos agregados en esta sesión
-                        todos_talleres = talleres_existentes + list(st.session_state.nuevos_talleres.keys())
-                        opciones_taller = sorted(list(set(todos_talleres))) + ["➕ Agregar nuevo taller"]
-                        
-                        seleccion_taller = st.selectbox(
+                        # Selectbox simple con talleres existentes
+                        taller = st.selectbox(
                             f"Taller_{i}",
-                            options=opciones_taller,
+                            options=talleres_existentes,
                             index=0,
-                            key=f"taller_select_{i}",
+                            key=f"taller_{i}",
                             label_visibility="collapsed"
                         )
-                        
-                        # Si selecciona "Agregar nuevo taller", mostrar campo de texto
-                        if seleccion_taller == "➕ Agregar nuevo taller":
-                            nuevo_taller = st.text_input(
-                                f"Nuevo_taller_{i}",
-                                placeholder="Escribe el nombre del nuevo taller...",
-                                key=f"nuevo_taller_{i}",
-                                label_visibility="collapsed"
-                            )
-                            if nuevo_taller and nuevo_taller.strip():
-                                # Guardar temporalmente en session_state
-                                st.session_state.nuevos_talleres[nuevo_taller.strip()] = True
-                                taller = nuevo_taller.strip()
-                            else:
-                                taller = ""
-                        else:
-                            taller = seleccion_taller
-                        
                         df_editable.at[i, "Taller"] = taller
                         
                     with cols[5]:
@@ -1183,28 +1143,6 @@ elif menu == "🏭 Talleres":
                         df_editable.at[i, "Asignar"] = asignar
                 
                 st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Botón para agregar nuevos talleres permanentemente
-                if st.session_state.nuevos_talleres:
-                    st.warning("⚠️ **Talleres nuevos pendientes de guardar:**")
-                    for nuevo_taller in st.session_state.nuevos_talleres.keys():
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.write(f"• {nuevo_taller}")
-                        with col2:
-                            if st.button(f"💾 Guardar", key=f"guardar_{nuevo_taller}"):
-                                success, message = agregar_nuevo_taller(nuevo_taller)
-                                if success:
-                                    st.success(f"✅ {message}")
-                                    # Actualizar la lista de talleres existentes
-                                    talleres_existentes.append(nuevo_taller)
-                                    talleres_existentes.sort()
-                                    # Remover del estado temporal
-                                    del st.session_state.nuevos_talleres[nuevo_taller]
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ {message}")
                 
                 # Botón verde para asignar
                 if st.form_submit_button("🚀 Asignar Cortes Seleccionados", type="primary"):
@@ -1830,6 +1768,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
