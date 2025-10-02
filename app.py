@@ -1007,9 +1007,45 @@ elif menu == "🏭 Talleres":
             st.error(f"Error al cargar datos de {solapa}: {str(e)}")
             return pd.DataFrame()
     
+    # Función para obtener talleres desde Google Sheets
+    def get_nombre_talleres():
+        try:
+            ws_talleres = spreadsheet.worksheet("Nombre_talleres")
+            data = ws_talleres.get_all_records()
+            if data and "Taller" in data[0]:
+                talleres = [row["Taller"] for row in data if row["Taller"].strip()]
+                return sorted(list(set(talleres)))  # Eliminar duplicados y ordenar
+            else:
+                # Si no hay datos o la columna no existe, obtener de la columna A
+                talleres = ws_talleres.col_values(1)
+                if talleres and talleres[0].lower() == "taller":
+                    talleres = talleres[1:]  # Eliminar encabezado
+                return sorted(list(set([t for t in talleres if t.strip()])))
+        except Exception as e:
+            st.error(f"Error al cargar talleres: {str(e)}")
+            return []
+    
+    # Función para agregar nuevo taller
+    def agregar_nuevo_taller(nombre_taller):
+        try:
+            ws_talleres = spreadsheet.worksheet("Nombre_talleres")
+            # Verificar si el taller ya existe
+            talleres_existentes = get_nombre_talleres()
+            if nombre_taller in talleres_existentes:
+                return False, "El taller ya existe"
+            
+            # Agregar nuevo taller
+            ws_talleres.append_row([nombre_taller])
+            return True, "Taller agregado exitosamente"
+        except Exception as e:
+            return False, f"Error al agregar taller: {str(e)}"
+    
     # Cargar todos los datos necesarios
     df_cortes = get_cortes_resumen()
     df_historial = cargar_datos("Historial_Entregas")
+    
+    # Obtener lista de talleres
+    talleres_existentes = get_nombre_talleres()
     
     if not df_cortes.empty:
         # Crear o obtener worksheet de talleres
@@ -1099,14 +1135,44 @@ elif menu == "🏭 Talleres":
                     with cols[3]:
                         st.write(row['Tipo de tela'])
                     with cols[4]:
-                        taller = st.text_input(
+                        # Selectbox para taller con opción de agregar nuevo
+                        opciones_taller = talleres_existentes + ["➕ Agregar nuevo taller"]
+                        
+                        seleccion_taller = st.selectbox(
                             f"Taller_{i}",
-                            value=row['Taller'],
-                            key=f"taller_{i}",
-                            placeholder="Taller",
+                            options=opciones_taller,
+                            index=0,
+                            key=f"taller_select_{i}",
                             label_visibility="collapsed"
                         )
+                        
+                        # Si selecciona "Agregar nuevo taller", mostrar campo de texto
+                        if seleccion_taller == "➕ Agregar nuevo taller":
+                            nuevo_taller = st.text_input(
+                                f"Nuevo_taller_{i}",
+                                placeholder="Escribe el nombre del nuevo taller...",
+                                key=f"nuevo_taller_{i}",
+                                label_visibility="collapsed"
+                            )
+                            if nuevo_taller.strip():
+                                # Agregar el nuevo taller a la lista y seleccionarlo
+                                if nuevo_taller not in talleres_existentes:
+                                    success, message = agregar_nuevo_taller(nuevo_taller.strip())
+                                    if success:
+                                        st.success(f"✅ {message}")
+                                        talleres_existentes.append(nuevo_taller.strip())
+                                        talleres_existentes.sort()
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ {message}")
+                                taller = nuevo_taller.strip()
+                            else:
+                                taller = ""
+                        else:
+                            taller = seleccion_taller
+                        
                         df_editable.at[i, "Taller"] = taller
+                        
                     with cols[5]:
                         fecha = st.date_input(
                             f"Fecha_{i}",
@@ -1745,6 +1811,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
+
 
 
 
