@@ -919,7 +919,7 @@ elif menu == "🏭 Proveedores":
 
 
 # -------------------------------
-# TALLERES (VERSIÓN COMPLETA UNIFICADA)
+# TALLERES (VERSIÓN COMPLETA UNIFICADA - MEJORADA)
 # -------------------------------
 elif menu == "🏭 Talleres":
     import time
@@ -989,6 +989,13 @@ elif menu == "🏭 Talleres":
             color: white !important;
             border: none !important;
         }
+        
+        .filtro-taller {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
         </style>
     """, unsafe_allow_html=True)
     
@@ -1028,6 +1035,7 @@ elif menu == "🏭 Talleres":
     # Cargar todos los datos necesarios
     df_cortes = get_cortes_resumen()
     df_historial = cargar_datos("Historial_Entregas")
+    df_devoluciones = cargar_datos("Devoluciones")
     
     # Obtener lista de talleres
     talleres_existentes = get_nombre_talleres()
@@ -1060,15 +1068,34 @@ elif menu == "🏭 Talleres":
         en_produccion = len(df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]) if not df_talleres.empty else 0
         entregados = len(df_talleres[df_talleres["Estado"].str.contains("ENTREGADO", na=False)]) if not df_talleres.empty else 0
         
-        # Calcular alertas (más de 20 días)
+        # CALCULAR ALERTAS MEJORADO: Cortes con faltantes o devoluciones no entregadas
         alertas = 0
-        if not df_talleres.empty and "Fecha Envío" in df_talleres.columns:
-            try:
-                df_talleres["Fecha Envío"] = pd.to_datetime(df_talleres["Fecha Envío"], errors='coerce')
-                df_talleres["Días Transcurridos"] = (date.today() - df_talleres["Fecha Envío"].dt.date).dt.days
-                alertas = len(df_talleres[(df_talleres["Días Transcurridos"] > 20) & (df_talleres["Estado"] == "EN PRODUCCIÓN")])
-            except:
-                alertas = 0
+        if not df_talleres.empty:
+            # Cortes con faltantes
+            cortes_faltantes = df_talleres[df_talleres["Estado"] == "ENTREGADO c/FALTANTES"]
+            
+            # Cortes con devoluciones (ARREGLANDO FALLAS)
+            cortes_devoluciones = df_talleres[df_talleres["Estado"] == "ARREGLANDO FALLAS"]
+            
+            alertas = len(cortes_faltantes) + len(cortes_devoluciones)
+        
+        # FILTRO POR TALLER
+        st.markdown('<div class="filtro-taller">', unsafe_allow_html=True)
+        col_filtro1, col_filtro2 = st.columns([1, 3])
+        with col_filtro1:
+            filtro_taller = st.selectbox(
+                "🔍 Filtrar por Taller:",
+                options=["Todos los talleres"] + talleres_existentes
+            )
+        with col_filtro2:
+            if filtro_taller != "Todos los talleres":
+                st.info(f"📊 Mostrando datos del taller: **{filtro_taller}**")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Aplicar filtro si se seleccionó un taller específico
+        if filtro_taller != "Todos los talleres":
+            df_talleres = df_talleres[df_talleres["Taller"] == filtro_taller]
+            cortes_sin_asignar = cortes_sin_asignar  # Estos no tienen taller asignado aún
         
         # HEADER CON MÉTRICAS (TARJETAS DE COLORES)
         st.subheader("📊 Resumen General")
@@ -1245,10 +1272,11 @@ elif menu == "🏭 Talleres":
             with col2:
                 st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
                 st.markdown("### 🟨 Pendientes de Revisión")
-                # Filtrar entregas con faltantes o fallas
+                
+                # MEJORADO: Incluir cortes con faltantes y devoluciones
                 pendientes_df = df_talleres[
-                    df_talleres["Estado"].str.contains("ENTREGADO", na=False) & 
-                    (df_talleres["Estado"] != "ENTREGADO")
+                    (df_talleres["Estado"] == "ENTREGADO c/FALTANTES") |
+                    (df_talleres["Estado"] == "ARREGLANDO FALLAS")
                 ]
                 
                 for idx, corte in pendientes_df.iterrows():
@@ -1270,16 +1298,28 @@ elif menu == "🏭 Talleres":
                     
                     faltante = total_prendas - prendas_recibidas
                     
-                    # Determinar tipo de pendiente
-                    if "FALTANTES" in estado:
+                    # Determinar tipo de pendiente y obtener información adicional
+                    if estado == "ENTREGADO c/FALTANTES":
                         icono = "⚠️"
-                        detalle = f"Faltan: {faltante} prendas"
-                    elif "FALLAS" in estado:
-                        icono = "❌"
-                        detalle = f"Falladas: {prendas_falladas}"
-                    else:
-                        icono = "📦"
-                        detalle = f"Recibidas: {prendas_recibidas}/{total_prendas}"
+                        detalle = f"Recibidas: {prendas_recibidas}/{total_prendas} | Faltan: {faltante}"
+                        # Buscar información de devoluciones si existe
+                        if not df_devoluciones.empty:
+                            devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
+                            if not devolucion.empty:
+                                prendas_devueltas = devolucion.iloc[0].get("Prendas Devueltas", 0)
+                                detalle += f" | Devueltas: {prendas_devueltas}"
+                    elif estado == "ARREGLANDO FALLAS":
+                        icono = "🔧"
+                        detalle = f"Falladas: {prendas_falladas} | En reparación"
+                        # Buscar información de devoluciones
+                        if not df_devoluciones.empty:
+                            devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
+                            if not devolucion.empty:
+                                prendas_devueltas = devolucion.iloc[0].get("Prendas Devueltas", 0)
+                                observaciones = devolucion.iloc[0].get("Observaciones", "")
+                                detalle += f" | Devueltas: {prendas_devueltas}"
+                                if observaciones:
+                                    detalle += f" | Obs: {observaciones[:30]}..."
                     
                     st.markdown(f'''
                     <div class="corte-card">
@@ -1323,9 +1363,8 @@ elif menu == "🏭 Talleres":
                 st.markdown('</div>', unsafe_allow_html=True)
         
         # ==============================================
-        # 📦 SISTEMA DE ENTREGAS (ESTILO MEJORADO)
+        # 📦 SISTEMA DE ENTREGAS (MEJORADO)
         # ==============================================
-      
         st.markdown("---")
         st.header("📦 Sistema de Entregas")
         
@@ -1334,30 +1373,6 @@ elif menu == "🏭 Talleres":
             cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
         else:
             cortes_produccion = pd.DataFrame()
-            # Mostrar información del corte
-            st.markdown("---")
-            st.subheader(f"📋 Información del Corte: {corte_seleccionado}")
-            
-            col_info1, col_info2, col_info3 = st.columns(3)
-            
-            with col_info1:
-                st.metric("📋 Artículo", corte_data.get("Artículo", "N/A"))
-                st.metric("🏭 Taller", corte_data.get("Taller", "N/A"))
-            
-            with col_info2:
-                # Usar Prendas de Cortes si está disponible, sino de Talleres
-                total_prendas_val = corte_info.get("Prendas", 0) if corte_info is not None else corte_data.get("Prendas", 0)
-                st.metric("📏 Total Prendas", total_prendas_val)
-                st.metric("✅ Recibidas", corte_data.get("Prendas Recibidas", 0))
-            
-            with col_info3:
-                # Color según estado
-                estado = corte_data.get("Estado", "")
-                color = "🟡" if "PRODUCCIÓN" in estado else "🔴" if "FALTANTES" in estado or "FALLAS" in estado else "🔵"
-                st.metric("📊 Estado", f"{color} {estado}")
-                st.metric("❌ Falladas", corte_data.get("Prendas Falladas", 0))
-
-
         
         # --- SELECCIÓN DE CORTE ---
         if not cortes_produccion.empty:
@@ -1408,193 +1423,123 @@ elif menu == "🏭 Talleres":
             except Exception as e:
                 st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
             
-            # Estilos CSS simples
-            st.markdown("""
-            <style>
-            .info-simple {
-                display: flex;
-                align-items: center;
-                margin: 8px 0;
-                font-size: 14px;
-            }
-            .info-icon-simple {
-                margin-right: 10px;
-                font-size: 16px;
-                width: 20px;
-            }
-            .info-label-simple {
-                color: #a0a0a0;
-                font-weight: normal;
-                margin-right: 5px;
-            }
-            .info-value-simple {
-                color: #3d3a3a;
-                font-weight: bold;
-            }
-            .estado-simple {
-                color: #4a8cff;
-                font-weight: bold;
-                margin-left: 5px;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+            # Mostrar información del corte
+            col_info1, col_info2 = st.columns(2)
+            with col_info1:
+                st.write(f"**Artículo:** {corte_data.get('Artículo', 'N/A')}")
+                st.write(f"**Taller:** {corte_data.get('Taller', 'N/A')}")
+            with col_info2:
+                st.write(f"**Total Prendas:** {total_prendas}")
+                st.write(f"**Fecha Envío:** {corte_data.get('Fecha Envío', 'N/A')}")
             
-            # Mostrar información simple sin cajas
-            # Taller
-            taller = corte_data.get("Taller", "N/A")
-            st.markdown(f"""
-            <div class="info-simple">
-                <span class="info-icon-simple">🏭</span>
-                <span class="info-label-simple">Taller:</span>
-                <span class="info-value-simple">{taller}</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Total de prendas
-            st.markdown(f"""
-            <div class="info-simple">
-                <span class="info-icon-simple">📏</span>
-                <span class="info-label-simple">Total Prendas:</span>
-                <span class="info-value-simple">{total_prendas}</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Fecha de envío (solo fecha, sin hora)
-            fecha_envio = corte_data.get("Fecha Envío", "N/A")
-            if isinstance(fecha_envio, str):
-                # Limpiar la fecha - quitar hora si existe
-                fecha_envio = fecha_envio.split(" ")[0]  # Tomar solo la parte de la fecha
-                fecha_envio = fecha_envio.split("T")[0]  # Por si viene en formato ISO
-            
-            st.markdown(f"""
-            <div class="info-simple">
-                <span class="info-icon-simple">📅</span>
-                <span class="info-label-simple">Fecha Envío:</span>
-                <span class="info-value-simple">{fecha_envio}</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Estado con círculo azul
-            st.markdown(f"""
-            <div class="info-simple">
-                <span class="info-icon-simple">📊</span>
-                <span class="info-label-simple">Estado:</span>
-                <span class="estado-simple">🔵 EN PRODUCCIÓN</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # --- REGISTRAR ENTREGA ---
+            # --- REGISTRAR ENTREGA MEJORADO ---
             st.subheader("📤 Registrar Entrega")
             
-            # Usar columns para alinear fecha y prendas recibidas
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
-            
-            with col2:
-                st.markdown('<div class="prendas-input">', unsafe_allow_html=True)
-                prendas_recibidas = st.number_input("Prendas Recibidas", 
-                                                  min_value=0, 
-                                                  max_value=total_prendas,
-                                                  value=0,
-                                                  key="prendas_recibidas")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Calcular faltante en tiempo real
-            faltante = max(0, total_prendas - prendas_recibidas)
-            
-            # Mostrar faltante solo si hay faltantes
-            if faltante > 0:
-                st.markdown(f"""
-                <div class="faltante-alert">
-                    ⚠️ Faltan {faltante} prendas para completar el corte
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Campo para fallas (solo si el corte se completa)
-            if prendas_recibidas == total_prendas:
-                fallas_detectadas = st.number_input("Prendas Falladas Detectadas", 
-                                                   min_value=0, 
-                                                   max_value=prendas_recibidas,
-                                                   value=0,
-                                                   help="Cantidad de prendas con fallas detectadas")
-            
-            # Botón de registro
-            if st.button("📝 REGISTRAR ENTREGA", use_container_width=True, type="primary"):
-                # Determinar nuevo estado
-                if faltante == 0:
-                    nuevo_estado = "ENTREGADO"
-                    mensaje = "✅ Entrega completada - Corte marcado como ENTREGADO"
-                else:
-                    nuevo_estado = "ENTREGADO c/FALTANTES"
-                    mensaje = f"⚠️ Entrega parcial - {faltante} faltantes"
+            with st.form(key="form_entrega"):
+                col1, col2, col3 = st.columns(3)
                 
-                # Lógica para guardar en Google Sheets
-                try:
-                    # 1. Actualizar Talleres
-                    # Buscar la fila correspondiente en Talleres
-                    talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
-                    talleres_data = talleres_worksheet.get_all_records()
+                with col1:
+                    fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
+                
+                with col2:
+                    prendas_recibidas = st.number_input("Prendas Recibidas", 
+                                                      min_value=0, 
+                                                      max_value=total_prendas,
+                                                      value=0)
+                
+                with col3:
+                    # NUEVO: Campo para prendas falladas
+                    prendas_falladas = st.number_input("Prendas Falladas", 
+                                                     min_value=0, 
+                                                     max_value=total_prendas,
+                                                     value=0,
+                                                     help="Cantidad de prendas con fallas detectadas")
+                
+                # NUEVO: Campo para observaciones
+                observaciones = st.text_area("Observaciones", placeholder="Observaciones sobre la entrega...")
+                
+                # Calcular faltante en tiempo real
+                faltante = max(0, total_prendas - prendas_recibidas - prendas_falladas)
+                
+                # Mostrar resumen
+                st.info(f"""
+                **Resumen de la entrega:**
+                - ✅ Prendas recibidas: {prendas_recibidas}
+                - ❌ Prendas falladas: {prendas_falladas}
+                - ⚠️ Faltantes: {faltante}
+                - 📊 Total corte: {total_prendas}
+                """)
+                
+                submitted = st.form_submit_button("📝 REGISTRAR ENTREGA", type="primary")
+                
+                if submitted:
+                    # Determinar nuevo estado
+                    if faltante == 0 and prendas_falladas == 0:
+                        nuevo_estado = "ENTREGADO"
+                        mensaje = "✅ Entrega completada - Corte marcado como ENTREGADO"
+                    elif faltante > 0:
+                        nuevo_estado = "ENTREGADO c/FALTANTES"
+                        mensaje = f"⚠️ Entrega parcial - {faltante} faltantes"
+                    elif prendas_falladas > 0:
+                        nuevo_estado = "ENTREGADO c/FALLAS"
+                        mensaje = f"⚠️ Entrega con fallas - {prendas_falladas} prendas falladas"
                     
-                    # Encontrar el índice de la fila a actualizar
-                    for i, row in enumerate(talleres_data):
-                        if str(row.get("Número de Corte", "")) == str(corte_seleccionado):
-                            # Actualizar los valores
-                            update_range = f"G{i+2}"  # Columna G = Prendas Recibidas
-                            talleres_worksheet.update(update_range, [[prendas_recibidas]])
-                            
-                            # Actualizar estado si es diferente
-                            if row.get("Estado") != nuevo_estado:
-                                estado_range = f"I{i+2}"  # Columna I = Estado
-                                talleres_worksheet.update(estado_range, [[nuevo_estado]])
-                            
-                            # Actualizar fecha de entrega
-                            fecha_range = f"F{i+2}"  # Columna F = Fecha Entrega
-                            talleres_worksheet.update(fecha_range, [[fecha_entrega.strftime("%Y-%m-%d")]])
-                            
-                            # Actualizar prendas falladas si corresponde
-                            if faltante == 0 and fallas_detectadas > 0:
-                                fallas_range = f"H{i+2}"  # Columna H = Prendas Falladas
-                                talleres_worksheet.update(fallas_range, [[fallas_detectadas]])
-                            
-                            break
-                    
-                    # 2. Registrar en Historial_Entrega
-                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
-                    siguiente_fila = len(historial_worksheet.get_all_values()) + 1
-                    
-                    # Datos para la nueva fila
-                    nueva_entrega = [
-                        corte_seleccionado,  # Número de Corte
-                        corte_data.get("Artículo", ""),  # Artículo
-                        taller,  # Taller
-                        fecha_entrega.strftime("%Y-%m-%d"),  # Fecha Entrega
-                        1,  # Entrega N° (asumimos que es la primera)
-                        prendas_recibidas,  # Prendas Recibidas
-                        0,  # Fallado p/Oferta (0 por defecto)
-                        0,  # Devolver p/Arreglar (0 por defecto)
-                        faltante,  # Faltantes
-                        nuevo_estado  # Estado
-                    ]
-                    
-                    historial_worksheet.append_row(nueva_entrega)
-                    
-                    st.success(mensaje)
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
-                    st.write("Detalles del error:", str(e))
+                    # Lógica para guardar en Google Sheets
+                    try:
+                        # 1. Actualizar Talleres
+                        talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                        talleres_data = talleres_worksheet.get_all_records()
+                        
+                        # Encontrar el índice de la fila a actualizar
+                        for i, row in enumerate(talleres_data):
+                            if str(row.get("Número de Corte", "")) == str(corte_seleccionado):
+                                # Actualizar los valores
+                                update_data = [
+                                    ["G", prendas_recibidas],  # Prendas Recibidas
+                                    ["H", prendas_falladas],   # Prendas Falladas
+                                    ["I", nuevo_estado],       # Estado
+                                    ["F", fecha_entrega.strftime("%Y-%m-%d")]  # Fecha Entrega
+                                ]
+                                
+                                for col_letter, value in update_data:
+                                    range_cell = f"{col_letter}{i+2}"
+                                    talleres_worksheet.update(range_cell, [[value]])
+                                break
+                        
+                        # 2. Registrar en Historial_Entrega
+                        historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                        
+                        # Datos para la nueva fila
+                        nueva_entrega = [
+                            corte_seleccionado,  # Número de Corte
+                            corte_data.get("Artículo", ""),  # Artículo
+                            corte_data.get("Taller", ""),  # Taller
+                            fecha_entrega.strftime("%Y-%m-%d"),  # Fecha Entrega
+                            1,  # Entrega N° 
+                            prendas_recibidas,  # Prendas Recibidas
+                            prendas_falladas,  # Prendas Falladas
+                            faltante,  # Faltantes
+                            observaciones,  # Observaciones
+                            nuevo_estado  # Estado
+                        ]
+                        
+                        historial_worksheet.append_row(nueva_entrega)
+                        
+                        st.success(mensaje)
+                        time.sleep(2)
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
         
         # ==============================================
-        # 📋 SEGUIMIENTO DE CORTES CON FALTANTES
+        # 📋 SEGUIMIENTO DE CORTES CON FALTANTES (MEJORADO)
         # ==============================================
         st.markdown("---")
         st.header("📋 Seguimiento de Cortes con Faltantes")
         
         try:
-            # Cargar datos actualizados de Talleres
+            # Cargar datos actualizados
             talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
             df_talleres_actualizado = pd.DataFrame(talleres_worksheet.get_all_records())
             
@@ -1605,7 +1550,7 @@ elif menu == "🏭 Talleres":
                 cortes_faltantes = pd.DataFrame()
         
             if not cortes_faltantes.empty:
-                # Crear tabla de seguimiento
+                # Crear tabla de seguimiento MEJORADA
                 datos_seguimiento = []
                 for _, corte in cortes_faltantes.iterrows():
                     nro_corte = corte.get("Número de Corte", "")
@@ -1613,7 +1558,7 @@ elif menu == "🏭 Talleres":
                     taller = corte.get("Taller", "")
                     fecha_entrega = corte.get("Fecha Entrega", "")
                     
-                    # Obtener total de prendas desde la solapa Cortes
+                    # Obtener total de prendas
                     total_prendas_corte = 0
                     if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
                         corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(nro_corte)]
@@ -1621,13 +1566,16 @@ elif menu == "🏭 Talleres":
                             total_prendas_corte = corte_cortes.iloc[0].get("Prendas", 0)
                     
                     recibidas = corte.get("Prendas Recibidas", 0)
-                    faltantes = max(0, total_prendas_corte - recibidas)
+                    falladas = corte.get("Prendas Falladas", 0)
+                    faltantes = max(0, total_prendas_corte - recibidas - falladas)
                     
                     datos_seguimiento.append({
                         "N° Corte": nro_corte,
                         "Artículo": articulo,
                         "Taller": taller,
                         "Fecha Entrega": fecha_entrega,
+                        "Recibidas": recibidas,
+                        "Falladas": falladas,
                         "Faltantes": faltantes
                     })
                 
@@ -1645,22 +1593,46 @@ elif menu == "🏭 Talleres":
                     if corte_completar:
                         corte_id = corte_completar.split(" - ")[0]
                         
-                        if st.button("✅ Marcar como ENTREGADO (faltantes completados)", type="primary"):
-                            try:
-                                # Actualizar estado en Google Sheets
-                                talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
-                                talleres_data = talleres_worksheet.get_all_records()
-                                
-                                for i, row in enumerate(talleres_data):
-                                    if str(row.get("Número de Corte", "")) == str(corte_id):
-                                        estado_range = f"I{i+2}"  # Columna I = Estado
-                                        talleres_worksheet.update(estado_range, [["ENTREGADO"]])
-                                        break
-                                
-                                st.success(f"Corte {corte_id} marcado como ENTREGADO")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Error al actualizar Google Sheets: {str(e)}")
+                        col_fecha, col_btn = st.columns([2, 1])
+                        with col_fecha:
+                            # NUEVO: Campo para fecha de entrega de faltantes
+                            fecha_entrega_faltantes = st.date_input("Fecha de entrega de faltantes", value=date.today())
+                        
+                        with col_btn:
+                            if st.button("✅ Marcar faltantes como ENTREGADOS", type="primary"):
+                                try:
+                                    # Actualizar estado en Google Sheets
+                                    talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                                    talleres_data = talleres_worksheet.get_all_records()
+                                    
+                                    for i, row in enumerate(talleres_data):
+                                        if str(row.get("Número de Corte", "")) == str(corte_id):
+                                            # Actualizar a ENTREGADO
+                                            estado_range = f"I{i+2}"
+                                            talleres_worksheet.update(estado_range, [["ENTREGADO"]])
+                                            
+                                            # Registrar en historial
+                                            historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                                            historial_data = [
+                                                corte_id,
+                                                row.get("Artículo", ""),
+                                                row.get("Taller", ""),
+                                                fecha_entrega_faltantes.strftime("%Y-%m-%d"),
+                                                2,  # Entrega N° 2 (faltantes)
+                                                row.get("Faltantes", 0),  # Prendas recibidas (los faltantes)
+                                                0,  # Falladas
+                                                0,  # Faltantes (ya no hay)
+                                                "Entrega de faltantes completada",
+                                                "ENTREGADO"
+                                            ]
+                                            historial_worksheet.append_row(historial_data)
+                                            break
+                                    
+                                    st.success(f"Corte {corte_id} marcado como ENTREGADO - Faltantes completados")
+                                    time.sleep(2)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Error al actualizar Google Sheets: {str(e)}")
                 else:
                     st.info("No hay cortes con faltantes pendientes")
             else:
@@ -1670,13 +1642,13 @@ elif menu == "🏭 Talleres":
             st.error(f"❌ Error al cargar datos de seguimiento: {str(e)}")
         
         # ==============================================
-        # 🔄 SISTEMA DE DEVOLUCIONES
+        # 🔄 SISTEMA DE DEVOLUCIONES (MEJORADO)
         # ==============================================
         st.markdown("---")
         st.header("🔄 Sistema de Devoluciones")
         
         try:
-            # Cargar datos actualizados de Talleres
+            # Cargar datos actualizados
             talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
             df_talleres_actualizado = pd.DataFrame(talleres_worksheet.get_all_records())
             
@@ -1684,7 +1656,8 @@ elif menu == "🏭 Talleres":
             if not df_talleres_actualizado.empty and "Estado" in df_talleres_actualizado.columns:
                 cortes_entregados = df_talleres_actualizado[
                     (df_talleres_actualizado["Estado"] == "ENTREGADO") | 
-                    (df_talleres_actualizado["Estado"] == "ENTREGADO c/FALTANTES")
+                    (df_talleres_actualizado["Estado"] == "ENTREGADO c/FALTANTES") |
+                    (df_talleres_actualizado["Estado"] == "ENTREGADO c/FALLAS")
                 ]
             else:
                 cortes_entregados = pd.DataFrame()
@@ -1695,7 +1668,8 @@ elif menu == "🏭 Talleres":
                 for _, corte in cortes_entregados.iterrows():
                     nro_corte = corte.get("Número de Corte", "Desconocido")
                     articulo = corte.get("Artículo", "Sin nombre")
-                    opciones_devolucion.append(f"{str(nro_corte)} - {articulo}")
+                    taller = corte.get("Taller", "Sin taller")  # NUEVO: Mostrar taller
+                    opciones_devolucion.append(f"{str(nro_corte)} - {articulo} - {taller}")
                 
                 corte_devolucion_str = st.selectbox(
                     "Seleccionar Corte para Devolución",
@@ -1711,10 +1685,13 @@ elif menu == "🏭 Talleres":
                     ].iloc[0]
                     
                     recibidas_dev = corte_dev_data.get("Prendas Recibidas", 0)
+                    falladas_dev = corte_dev_data.get("Prendas Falladas", 0)
                     
                     with st.form(key=f"devolucion_form_{corte_devolucion_id}"):
                         st.write(f"**Corte:** {corte_devolucion_id} - {corte_dev_data.get('Artículo', '')}")
+                        st.write(f"**Taller:** {corte_dev_data.get('Taller', 'N/A')}")  # NUEVO: Mostrar taller
                         st.write(f"**Prendas recibidas:** {recibidas_dev}")
+                        st.write(f"**Prendas falladas:** {falladas_dev}")
                         
                         col_dev1, col_dev2 = st.columns(2)
                         
@@ -1735,14 +1712,14 @@ elif menu == "🏭 Talleres":
                             try:
                                 # Registrar en la hoja de Devoluciones
                                 devoluciones_worksheet = client.open(SHEET_NAME).worksheet("Devoluciones")
-                                siguiente_fila = len(devoluciones_worksheet.get_all_values()) + 1
                                 
                                 nueva_devolucion = [
                                     corte_devolucion_id,  # Número de Corte
+                                    corte_dev_data.get("Taller", ""),  # NUEVO: Taller
                                     fecha_devolucion.strftime("%Y-%m-%d"),  # Fecha Devolución
                                     prendas_devolver,  # Prendas Devueltas
                                     observaciones,  # Observaciones
-                                    "ARREGLANDO FALLAS"  # Estado
+                                    "PENDIENTE"  # Estado inicial
                                 ]
                                 
                                 devoluciones_worksheet.append_row(nueva_devolucion)
@@ -1753,12 +1730,13 @@ elif menu == "🏭 Talleres":
                                 
                                 for i, row in enumerate(talleres_data):
                                     if str(row.get("Número de Corte", "")) == str(corte_devolucion_id):
-                                        estado_range = f"I{i+2}"  # Columna I = Estado
+                                        estado_range = f"I{i+2}"
                                         talleres_worksheet.update(estado_range, [["ARREGLANDO FALLAS"]])
                                         break
                                 
                                 st.success(f"✅ Devolución registrada. {prendas_devolver} prendas devueltas al taller.")
                                 st.info("El corte pasará a estado 'ARREGLANDO FALLAS'")
+                                time.sleep(2)
                                 st.rerun()
                                 
                             except Exception as e:
@@ -1768,16 +1746,102 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de devoluciones: {str(e)}")
-
-
-
-
-
-
-
-
-
-
+        
+        # ==============================================
+        # 🔧 SEGUIMIENTO DE DEVOLUCIONES (NUEVA SECCIÓN)
+        # ==============================================
+        st.markdown("---")
+        st.header("🔧 Seguimiento de Devoluciones")
+        
+        try:
+            # Cargar datos de devoluciones
+            if df_devoluciones.empty:
+                st.info("No hay devoluciones registradas")
+            else:
+                # Filtrar devoluciones pendientes
+                devoluciones_pendientes = df_devoluciones[df_devoluciones["Estado"] == "PENDIENTE"]
+                
+                if not devoluciones_pendientes.empty:
+                    st.subheader("Devoluciones Pendientes de Reparación")
+                    
+                    for _, devolucion in devoluciones_pendientes.iterrows():
+                        nro_corte = devolucion.get("Número de Corte", "")
+                        taller = devolucion.get("Taller", "N/A")
+                        prendas_devueltas = devolucion.get("Prendas Devueltas", 0)
+                        observaciones = devolucion.get("Observaciones", "")
+                        fecha_devolucion = devolucion.get("Fecha Devolución", "")
+                        
+                        with st.expander(f"🔄 Corte {nro_corte} - Taller: {taller} - {prendas_devueltas} prendas"):
+                            st.write(f"**Fecha devolución:** {fecha_devolucion}")
+                            st.write(f"**Observaciones:** {observaciones}")
+                            
+                            with st.form(key=f"reparacion_form_{nro_corte}"):
+                                col_rep1, col_rep2 = st.columns(2)
+                                
+                                with col_rep1:
+                                    fecha_reparacion = st.date_input("Fecha de reparación", value=date.today())
+                                
+                                with col_rep2:
+                                    prendas_reparadas = st.number_input("Prendas reparadas", 
+                                                                      min_value=0, 
+                                                                      max_value=prendas_devueltas,
+                                                                      value=prendas_devueltas)
+                                
+                                observaciones_reparacion = st.text_area("Observaciones de la reparación")
+                                
+                                if st.form_submit_button("✅ Marcar como Reparado", type="primary"):
+                                    try:
+                                        # Actualizar estado en Devoluciones
+                                        devoluciones_worksheet = client.open(SHEET_NAME).worksheet("Devoluciones")
+                                        devoluciones_data = devoluciones_worksheet.get_all_records()
+                                        
+                                        for i, row in enumerate(devoluciones_data):
+                                            if (str(row.get("Número de Corte", "")) == str(nro_corte) and 
+                                                row.get("Estado") == "PENDIENTE"):
+                                                
+                                                # Actualizar estado a REPARADO
+                                                estado_range = f"F{i+2}"  # Columna F = Estado
+                                                devoluciones_worksheet.update(estado_range, [["REPARADO"]])
+                                                
+                                                # Registrar en historial
+                                                historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                                                historial_data = [
+                                                    nro_corte,
+                                                    "",  # Artículo (se puede obtener de Talleres)
+                                                    taller,
+                                                    fecha_reparacion.strftime("%Y-%m-%d"),
+                                                    3,  # Entrega N° 3 (reparación)
+                                                    prendas_reparadas,  # Prendas recibidas
+                                                    0,  # Falladas
+                                                    0,  # Faltantes
+                                                    f"Reparación: {observaciones_reparacion}",
+                                                    "REPARADO"
+                                                ]
+                                                historial_worksheet.append_row(historial_data)
+                                                
+                                                # Actualizar estado en Talleres si corresponde
+                                                talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
+                                                talleres_data = talleres_worksheet.get_all_records()
+                                                
+                                                for j, tall_row in enumerate(talleres_data):
+                                                    if str(tall_row.get("Número de Corte", "")) == str(nro_corte):
+                                                        estado_taller_range = f"I{j+2}"
+                                                        talleres_worksheet.update(estado_taller_range, [["ENTREGADO"]])
+                                                        break
+                                                
+                                                break
+                                        
+                                        st.success(f"✅ Reparación registrada para corte {nro_corte}")
+                                        time.sleep(2)
+                                        st.rerun()
+                                        
+                                    except Exception as e:
+                                        st.error(f"❌ Error al registrar reparación: {str(e)}")
+                else:
+                    st.info("No hay devoluciones pendientes de reparación")
+        
+        except Exception as e:
+            st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
 
 
 
