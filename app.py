@@ -1584,7 +1584,7 @@ elif menu == "🏭 Talleres":
                     st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
         
         # ==============================================
-        # 🔧 SEGUIMIENTO DE DEVOLUCIONES (CORREGIDO)
+        # 🔧 SEGUIMIENTO DE DEVOLUCIONES (CORREGIDO - MANEJO DE ERRORES)
         # ==============================================
         st.markdown("---")
         st.header("🔧 Seguimiento de Devoluciones")
@@ -1604,22 +1604,39 @@ elif menu == "🏭 Talleres":
                     prendas_falladas = int(corte.get("Prendas Falladas", 0))
                     
                     # Buscar información de devolución para obtener prendas devueltas
-                    prendas_devueltas = prendas_falladas  # Por defecto usar las falladas
+                    prendas_devueltas = 0
                     devolucion_info = ""
                     if not df_devoluciones.empty:
                         devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
                         if not devolucion.empty:
                             dev_data = devolucion.iloc[0]
-                            prendas_devueltas = int(dev_data.get("Prendas Devueltas", prendas_falladas))
+                            prendas_devueltas = int(dev_data.get("Prendas Devueltas", 0))
                             observaciones = dev_data.get("Observaciones", "")
                             fecha_devolucion = dev_data.get("Fecha Devolución", "")
                             devolucion_info = f" | Devueltas: {prendas_devueltas} | Fecha: {fecha_devolucion}"
                             if observaciones:
                                 devolucion_info += f" | Obs: {observaciones}"
                     
+                    # CORREGIDO: Lógica para determinar valores mínimos y máximos
+                    # Si no hay información de devolución, usar prendas_falladas como referencia
+                    if prendas_devueltas == 0:
+                        prendas_devueltas = prendas_falladas
+                    
+                    # Determinar valores mínimos y máximos para el input
+                    min_reparadas = min(prendas_devueltas, prendas_falladas)
+                    max_reparadas = max(prendas_devueltas, prendas_falladas)
+                    
+                    # Si hay discrepancia, mostrar advertencia
+                    tiene_discrepancia = prendas_devueltas != prendas_falladas
+                    
                     with st.expander(f"🔧 Corte {nro_corte} - {articulo} - Taller: {taller}"):
                         st.write(f"**Prendas recibidas:** {prendas_recibidas}")
-                        st.write(f"**Prendas falladas:** {prendas_falladas}")
+                        st.write(f"**Prendas falladas (registro):** {prendas_falladas}")
+                        st.write(f"**Prendas devueltas (devolución):** {prendas_devueltas}")
+                        
+                        if tiene_discrepancia:
+                            st.warning(f"⚠️ Hay discrepancia entre falladas ({prendas_falladas}) y devueltas ({prendas_devueltas})")
+                        
                         if devolucion_info:
                             st.write(f"**Información devolución:** {devolucion_info}")
                         
@@ -1630,18 +1647,22 @@ elif menu == "🏭 Talleres":
                                 fecha_reparacion = st.date_input("Fecha de reparación", value=date.today(), key=f"fecha_rep_{nro_corte}")
                             
                             with col_rep2:
-                                # CORREGIDO: Permitir valores desde prendas_devueltas hasta prendas_falladas
+                                # CORREGIDO: Manejo flexible de valores mínimos y máximos
                                 prendas_reparadas = st.number_input("Prendas reparadas", 
-                                                                  min_value=prendas_devueltas,  # Mínimo las devueltas
-                                                                  max_value=prendas_falladas,   # Máximo las falladas
-                                                                  value=prendas_devueltas,      # Valor por defecto las devueltas
+                                                                  min_value=0,  # Permitir desde 0
+                                                                  max_value=max(prendas_devueltas, prendas_falladas, 1),  # Usar el mayor valor
+                                                                  value=min_reparadas,  # Valor por defecto el menor
                                                                   key=f"reparadas_{nro_corte}",
-                                                                  help=f"Mínimo: {prendas_devueltas} (prendas devueltas)")
+                                                                  help=f"Rango: 0 - {max_reparadas}")
                             
                             observaciones_reparacion = st.text_input("Observaciones de la reparación",
                                                                    placeholder="Estado de la reparación...",
                                                                    key=f"obs_rep_{nro_corte}",
                                                                    max_chars=100)
+                            
+                            # Información adicional sobre la reparación
+                            if prendas_reparadas < prendas_devueltas:
+                                st.info(f"ℹ️ Se devolvieron {prendas_devueltas} prendas pero solo se repararon {prendas_reparadas}. Las {prendas_devueltas - prendas_reparadas} restantes se considerarán pérdidas.")
                             
                             if st.form_submit_button("✅ Marcar como Reparado", type="primary", key=f"btn_rep_{nro_corte}"):
                                 try:
@@ -1655,16 +1676,27 @@ elif menu == "🏭 Talleres":
                                             estado_range = f"I{i+2}"
                                             talleres_worksheet.update(estado_range, [["ENTREGADO"]])
                                             
-                                            # Actualizar prendas falladas si se repararon algunas
+                                            # Actualizar prendas falladas si no se repararon todas
                                             if prendas_reparadas < prendas_falladas:
                                                 fallas_range = f"H{i+2}"
                                                 nuevas_falladas = prendas_falladas - prendas_reparadas
                                                 talleres_worksheet.update(fallas_range, [[str(nuevas_falladas)]])
+                                            # Si se repararon más de las falladas originales, actualizar también
+                                            elif prendas_reparadas > prendas_falladas:
+                                                fallas_range = f"H{i+2}"
+                                                talleres_worksheet.update(fallas_range, [["0"]])  # No hay fallas restantes
                                             
                                             break
                                     
                                     # Registrar en historial
                                     historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
+                                    
+                                    # Calcular si hay pérdidas
+                                    perdidas = max(0, prendas_devueltas - prendas_reparadas)
+                                    observacion_final = f"Reparación: {observaciones_reparacion}"
+                                    if perdidas > 0:
+                                        observacion_final += f" | {perdidas} prendas no reparadas (pérdida)"
+                                    
                                     historial_data = [
                                         str(nro_corte),
                                         str(articulo),
@@ -1672,9 +1704,9 @@ elif menu == "🏭 Talleres":
                                         str(fecha_reparacion.strftime("%Y-%m-%d")),
                                         "3",  # Entrega N° 3 (reparación)
                                         str(prendas_reparadas),  # Prendas recibidas (reparadas)
-                                        "0",  # Falladas
+                                        "0",  # Falladas (ya se actualizaron en Talleres)
                                         "0",  # Faltantes
-                                        f"Reparación completada: {observaciones_reparacion}",
+                                        observacion_final,
                                         "REPARADO"
                                     ]
                                     historial_worksheet.append_row(historial_data)
@@ -1691,11 +1723,20 @@ elif menu == "🏭 Talleres":
                                                     
                                                     estado_dev_range = f"F{i+2}"  # Columna F = Estado
                                                     devoluciones_worksheet.update(estado_dev_range, [["REPARADO"]])
+                                                    
+                                                    # Agregar observación sobre el resultado de la reparación
+                                                    if perdidas > 0:
+                                                        obs_range = f"E{i+2}"  # Columna E = Observaciones
+                                                        obs_actual = dev_row.get("Observaciones", "")
+                                                        obs_nueva = f"{obs_actual} | Reparadas: {prendas_reparadas}/{prendas_devueltas}"
+                                                        devoluciones_worksheet.update(obs_range, [[obs_nueva]])
                                                     break
-                                        except:
-                                            pass  # Si no existe la hoja Devoluciones, continuar
+                                        except Exception as dev_error:
+                                            st.warning(f"⚠️ No se pudo actualizar devoluciones: {dev_error}")
                                     
                                     st.success(f"✅ Reparación registrada para corte {nro_corte}")
+                                    if perdidas > 0:
+                                        st.warning(f"⚠️ {perdidas} prendas no pudieron ser reparadas y se consideran pérdida")
                                     time.sleep(2)
                                     st.rerun()
                                     
