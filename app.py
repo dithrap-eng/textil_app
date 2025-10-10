@@ -516,7 +516,7 @@ elif menu == "📊 Resumen Compras":
 
 
 # -------------------------------
-# STOCK (VERSIÓN SIMPLIFICADA)
+# STOCK (CON GRÁFICOS NATIVOS)
 # -------------------------------
 elif menu == "📦 Stock":
     st.header("📦 Stock disponible (en rollos)")
@@ -543,7 +543,6 @@ elif menu == "📦 Stock":
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            # Solo mostrar telas que tienen stock > 0
             telas_con_stock = sorted(df_con_stock["Tipo de tela"].unique())
             filtro_tela = st.multiselect(
                 "Filtrar por tela", 
@@ -552,7 +551,6 @@ elif menu == "📦 Stock":
             )
         
         with col_f2:
-            # Filtrar colores basado en las telas seleccionadas
             if filtro_tela:
                 colores_filtrados = df_con_stock[df_con_stock["Tipo de tela"].isin(filtro_tela)]["Color"].unique()
             else:
@@ -576,7 +574,7 @@ elif menu == "📦 Stock":
         if not df_filtrado.empty:
             st.subheader("📋 Stock Disponible")
             
-            # Agregar indicadores visuales simples
+            # Agregar indicadores visuales
             def estilo_fila(row):
                 rollos = row["Rollos"]
                 if rollos >= 10:
@@ -592,48 +590,56 @@ elif menu == "📦 Stock":
             
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
             
-            # RESUMEN POR TELA (VERSIÓN SIMPLE)
+            # GRÁFICO DE BARRAS CON STREAMLIT NATIVO
             st.markdown("---")
-            st.subheader("📊 Resumen por Tipo de Tela")
+            st.subheader("📊 Gráfico de Stock por Tela")
             
-            # Agrupar por tipo de tela
+            # Preparar datos para el gráfico
             resumen_telas = df_filtrado.groupby("Tipo de tela").agg({
                 "Rollos": "sum",
                 "Color": "nunique"
             }).round(0)
             
-            resumen_telas.columns = ["Total Rollos", "Colores"]
+            resumen_telas.columns = ["Total Rollos", "Cantidad Colores"]
             resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
             
-            # Mostrar en columnas simples
-            cols = st.columns(2)
-            for idx, (tela, datos) in enumerate(resumen_telas.iterrows()):
-                with cols[idx % 2]:
-                    total_rollos = int(datos["Total Rollos"])
-                    num_colores = int(datos["Colores"])
-                    
-                    # Color según stock
-                    if total_rollos >= 10:
-                        color_emoji = "✅"
-                        color_bg = "#E8F5E8"
-                    elif total_rollos >= 5:
-                        color_emoji = "⚠️"
-                        color_bg = "#FFF3E0"
-                    else:
-                        color_emoji = "🔴"
-                        color_bg = "#FFEBEE"
+            # OPCIÓN 1: Gráfico de barras simple nativo
+            st.write("**Gráfico de Barras Simple:**")
+            st.bar_chart(resumen_telas["Total Rollos"])
+            
+            # OPCIÓN 2: Mostrar datos junto al gráfico
+            col_grafico, col_datos = st.columns([2, 1])
+            
+            with col_grafico:
+                st.write("**Comparación Visual:**")
+                # Podemos hacer un gráfico más personalizado con algo de HTML/CSS
+                for tela, datos in resumen_telas.iterrows():
+                    rollos = int(datos["Total Rollos"])
+                    porcentaje = (rollos / resumen_telas["Total Rollos"].max()) * 100
                     
                     st.markdown(f"""
-                    <div style='
-                        background: {color_bg}; 
-                        padding: 15px; 
-                        border-radius: 10px; 
-                        border-left: 4px solid #4CAF50;
-                        margin-bottom: 10px;
-                    '>
-                        <h4>{color_emoji} {tela}</h4>
-                        <p style='font-size: 24px; font-weight: bold; margin: 5px 0;'>{total_rollos} rollos</p>
-                        <p style='color: #666; margin: 0;'>🎨 {num_colores} color{'es' if num_colores != 1 else ''}</p>
+                    <div style='margin: 10px 0;'>
+                        <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                            <span><strong>{tela}</strong></span>
+                            <span>{rollos} rollos</span>
+                        </div>
+                        <div style='background: #f0f0f0; border-radius: 10px; height: 20px;'>
+                            <div style='background: #4CAF50; height: 100%; border-radius: 10px; width: {porcentaje}%;'></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col_datos:
+                st.write("**Detalles por Tela:**")
+                for tela, datos in resumen_telas.iterrows():
+                    rollos = int(datos["Total Rollos"])
+                    colores = int(datos["Cantidad Colores"])
+                    
+                    st.markdown(f"""
+                    <div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;'>
+                        <div style='font-weight: bold;'>{tela}</div>
+                        <div>📦 {rollos} rollos</div>
+                        <div>🎨 {colores} colores</div>
                     </div>
                     """, unsafe_allow_html=True)
             
@@ -641,17 +647,17 @@ elif menu == "📦 Stock":
             st.markdown("---")
             st.subheader("📈 Totales Generales")
             
-            total_rollos_filtrado = df_filtrado["Rollos"].sum()
-            total_telas_filtrado = len(df_filtrado["Tipo de tela"].unique())
-            total_colores_filtrado = len(df_filtrado["Color"].unique())
+            total_rollos = df_filtrado["Rollos"].sum()
+            total_telas = len(df_filtrado["Tipo de tela"].unique())
+            total_colores = len(df_filtrado["Color"].unique())
             
             col_t1, col_t2, col_t3 = st.columns(3)
             with col_t1:
-                st.metric("📦 Total Rollos", total_rollos_filtrado)
+                st.metric("📦 Total Rollos", total_rollos)
             with col_t2:
-                st.metric("🎨 Tipos de Tela", total_telas_filtrado)
+                st.metric("🎨 Tipos de Tela", total_telas)
             with col_t3:
-                st.metric("🌈 Colores", total_colores_filtrado)
+                st.metric("🌈 Colores", total_colores)
                 
         else:
             st.info("ℹ️ No hay stock disponible con los filtros aplicados")
@@ -1788,6 +1794,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
