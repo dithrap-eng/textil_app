@@ -603,9 +603,6 @@ elif menu == "📦 Stock":
             resumen_telas.columns = ["Total Rollos", "Cantidad Colores"]
             resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
             
-            # OPCIÓN 1: Gráfico de barras simple nativo
-            st.write("**Gráfico de Barras Simple:**")
-            st.bar_chart(resumen_telas["Total Rollos"])
             
             # OPCIÓN 2: Mostrar datos junto al gráfico
             col_grafico, col_datos = st.columns([2, 1])
@@ -1794,6 +1791,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
