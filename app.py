@@ -516,7 +516,7 @@ elif menu == "📊 Resumen Compras":
 
 
 # -------------------------------
-# STOCK (CON GRÁFICOS NATIVOS)
+# STOCK (CON GRÁFICO DE COMPARACIÓN VISUAL Y VALORIZACIÓN)
 # -------------------------------
 elif menu == "📦 Stock":
     st.header("📦 Stock disponible (en rollos)")
@@ -577,9 +577,9 @@ elif menu == "📦 Stock":
             # Agregar indicadores visuales
             def estilo_fila(row):
                 rollos = row["Rollos"]
-                if rollos >= 7:
+                if rollos >= 10:
                     return "✅ Buen stock"
-                elif rollos >= 3:
+                elif rollos >= 5:
                     return "⚠️ Stock medio"
                 else:
                     return "🔴 Stock bajo"
@@ -590,9 +590,9 @@ elif menu == "📦 Stock":
             
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
             
-            # GRÁFICO DE BARRAS CON STREAMLIT NATIVO
+            # GRÁFICO DE COMPARACIÓN VISUAL
             st.markdown("---")
-            st.subheader("📊 Gráfico de Stock por Tela")
+            st.subheader("📊 Comparación Visual de Stock")
             
             # Preparar datos para el gráfico
             resumen_telas = df_filtrado.groupby("Tipo de tela").agg({
@@ -603,104 +603,147 @@ elif menu == "📦 Stock":
             resumen_telas.columns = ["Total Rollos", "Cantidad Colores"]
             resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
             
+            # Gráfico de barras de progreso personalizado
+            st.write("**Distribución de Stock por Tela:**")
             
-            # OPCIÓN 2: Mostrar datos junto al gráfico
-            col_grafico, col_datos = st.columns([2, 1])
-            
-            with col_grafico:
-                st.write("**Comparación Visual:**")
-                # Podemos hacer un gráfico más personalizado con algo de HTML/CSS
-                for tela, datos in resumen_telas.iterrows():
-                    rollos = int(datos["Total Rollos"])
-                    porcentaje = (rollos / resumen_telas["Total Rollos"].max()) * 100
-                    
-                    st.markdown(f"""
-                    <div style='margin: 10px 0;'>
-                        <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
-                            <span><strong>{tela}</strong></span>
-                            <span>{rollos} rollos</span>
-                        </div>
-                        <div style='background: #f0f0f0; border-radius: 10px; height: 20px;'>
-                            <div style='background: #4CAF50; height: 100%; border-radius: 10px; width: {porcentaje}%;'></div>
-                        </div>
+            for tela, datos in resumen_telas.iterrows():
+                rollos = int(datos["Total Rollos"])
+                colores = int(datos["Cantidad Colores"])
+                max_rollos = resumen_telas["Total Rollos"].max()
+                porcentaje = (rollos / max_rollos) * 100 if max_rollos > 0 else 0
+                
+                # Determinar color según cantidad
+                if rollos >= 6:
+                    color_barra = "#4CAF50"  # Verde
+                    emoji = "✅"
+                elif rollos >= 3:
+                    color_barra = "#FF9800"  # Naranja
+                    emoji = "⚠️"
+                else:
+                    color_barra = "#F44336"  # Rojo
+                    emoji = "🔴"
+                
+                st.markdown(f"""
+                <div style='margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;'>
+                    <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
+                        <span style='font-weight: bold;'>{emoji} {tela}</span>
+                        <span style='font-weight: bold;'>{rollos} rollos</span>
                     </div>
-                    """, unsafe_allow_html=True)
+                    <div style='background: #e0e0e0; border-radius: 10px; height: 20px; position: relative;'>
+                        <div style='background: {color_barra}; height: 100%; border-radius: 10px; width: {porcentaje}%; 
+                                    transition: width 0.5s;'></div>
+                    </div>
+                    <div style='display: flex; justify-content: space-between; margin-top: 5px; font-size: 12px; color: #666;'>
+                        <span>🎨 {colores} color{'es' if colores != 1 else ''}</span>
+                        <span>{porcentaje:.0f}% del máximo</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
+            # SECCIÓN DE VALORIZACIÓN (RECUPERADA DEL CÓDIGO ORIGINAL)
+            st.markdown("---")
+            st.subheader("💰 Valorización del Stock")
+            
+            # Obtener el resumen de compras para calcular precios promedios
+            df_compras = get_compras_resumen()
+            total_rollos_filtrado = df_filtrado["Rollos"].sum()
+            
+            # 1. Mostrar precio promedio por tipo de tela seleccionado
+            if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
+                # Función para convertir correctamente el formato argentino
+                def convertir_formato_argentino(valor):
+                    if pd.isna(valor):
+                        return 0.0
+                    if isinstance(valor, (int, float)):
+                        return float(valor)
+                    valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
+                    try:
+                        # Si tiene formato 15.012,00 -> convertir a 15012.00
+                        if "." in valor_str and "," in valor_str:
+                            return float(valor_str.replace(".", "").replace(",", "."))
+                        # Si tiene formato 150,12 -> convertir a 150.12
+                        elif "," in valor_str:
+                            return float(valor_str.replace(",", "."))
+                        else:
+                            return float(valor_str)
+                    except:
+                        return 0.0
+                
+                # Función para formatear en estilo argentino
+                def formato_argentino_moneda(valor):
+                    if pd.isna(valor) or valor == 0:
+                        return "USD 0,00"
+                    formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    return f"USD {formatted}"
+                
+                # Convertir la columna de precios
+                df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
+                
+                # Calcular precio promedio por tipo de tela si hay filtro
+                precios_telas = {}
+                if filtro_tela:
+                    for tela in filtro_tela:
+                        precio_promedio_tela = df_compras[
+                            df_compras["Tipo de tela"] == tela
+                        ]["Precio promedio x rollo num"].mean()
+                        
+                        if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
+                            # CORRECCIÓN: No dividir por 100 aquí
+                            precio_corregido = precio_promedio_tela
+                            precios_telas[tela] = precio_corregido
+                
+                # Mostrar precios individuales si hay múltiples telas
+                if precios_telas:
+                    st.write("**Precios Promedio por Tela:**")
+                    for tela, precio in precios_telas.items():
+                        st.write(f"• **{tela}**: {formato_argentino_moneda(precio)} x rollo")
+                
+                # 2. Calcular valor estimado CORRECTAMENTE
+                if precios_telas:
+                    if len(precios_telas) == 1:
+                        precio_promedio_global = list(precios_telas.values())[0]
+                    else:
+                        precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
+                    
+                    # CORRECCIÓN: Calcular directamente sin dividir por 100
+                    total_valorizado = total_rollos_filtrado * precio_promedio_global
+                    
+                    # Mostrar métricas de valorización
+                    col_v1, col_v2, col_v3 = st.columns(3)
+                    
+                    with col_v1:
+                        st.metric("📦 Total Rollos", total_rollos_filtrado)
+                    
+                    with col_v2:
+                        st.metric("💰 Precio Promedio", formato_argentino_moneda(precio_promedio_global))
+                    
+                    with col_v3:
+                        st.metric("💲 Valor Total", formato_argentino_moneda(total_valorizado))
+                    
+                    # Detalle adicional
+                    st.info(f"**Valorización calculada:** {total_rollos_filtrado} rollos × {formato_argentino_moneda(precio_promedio_global)} = **{formato_argentino_moneda(total_valorizado)}**")
+                else:
+                    st.info("ℹ️ No hay información de precios para las telas seleccionadas")
+            else:
+                st.info("ℹ️ No hay información de precios disponible para valorización")
             
             # Totales generales
             st.markdown("---")
             st.subheader("📈 Totales Generales")
             
-            total_rollos = df_filtrado["Rollos"].sum()
-            total_telas = len(df_filtrado["Tipo de tela"].unique())
-            total_colores = len(df_filtrado["Color"].unique())
+            total_telas_filtrado = len(df_filtrado["Tipo de tela"].unique())
+            total_colores_filtrado = len(df_filtrado["Color"].unique())
             
             col_t1, col_t2, col_t3 = st.columns(3)
             with col_t1:
-                st.metric("📦 Total Rollos", total_rollos)
+                st.metric("📦 Total Rollos", total_rollos_filtrado)
             with col_t2:
-                st.metric("🎨 Tipos de Tela", total_telas)
+                st.metric("🎨 Tipos de Tela", total_telas_filtrado)
             with col_t3:
-                st.metric("🌈 Colores", total_colores)
+                st.metric("🌈 Colores", total_colores_filtrado)
                 
         else:
             st.info("ℹ️ No hay stock disponible con los filtros aplicados")
-        
-          # 1. Mostrar precio promedio por tipo de tela seleccionado
-        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            # Función para convertir correctamente el formato argentino
-            def convertir_formato_argentino(valor):
-                if pd.isna(valor):
-                    return 0.0
-                if isinstance(valor, (int, float)):
-                    return float(valor)
-                valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
-                try:
-                    # Si tiene formato 15.012,00 -> convertir a 15012.00
-                    if "." in valor_str and "," in valor_str:
-                        return float(valor_str.replace(".", "").replace(",", "."))
-                    # Si tiene formato 150,12 -> convertir a 150.12
-                    elif "," in valor_str:
-                        return float(valor_str.replace(",", "."))
-                    else:
-                        return float(valor_str)
-                except:
-                    return 0.0
-            
-            # Función para formatear en estilo argentino
-            def formato_argentino_moneda(valor):
-                if pd.isna(valor) or valor == 0:
-                    return "USD 0,00"
-                formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                return f"USD {formatted}"
-            
-            # Convertir la columna de precios
-            df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
-            
-            # Calcular precio promedio por tipo de tela si hay filtro
-            precios_telas = {}
-            if filtro_tela:
-                for tela in filtro_tela:
-                    precio_promedio_tela = df_compras[
-                        df_compras["Tipo de tela"] == tela
-                    ]["Precio promedio x rollo num"].mean()
-                    
-                    if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
-                        # CORRECCIÓN: No dividir por 100 aquí
-                        precio_corregido = precio_promedio_tela
-                        precios_telas[tela] = precio_corregido
-                        st.write(f"💲 Precio promedio x rollo ({tela}): {formato_argentino_moneda(precio_corregido)}")
-            
-            # 2. Calcular valor estimado CORRECTAMENTE
-            if precios_telas:
-                if len(precios_telas) == 1:
-                    precio_promedio_global = list(precios_telas.values())[0]
-                else:
-                    precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
-                
-                # CORRECCIÓN: Calcular directamente sin dividir por 100
-                total_valorizado = total_rollos * precio_promedio_global
-                st.write(f"💲 Valor estimado (rollos × precio promedio): {formato_argentino_moneda(total_valorizado)}")
         
         # Sección informativa sobre stock cero
         with st.expander("📋 Ver telas sin stock"):
@@ -1834,6 +1877,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
