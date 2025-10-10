@@ -540,17 +540,16 @@ elif menu == "📦 Stock":
         border-left-color: #F44336;
         background-color: #FFEBEE;
     }
-    .kpi-badge {
+    .color-badge {
         display: inline-block;
         padding: 4px 8px;
         border-radius: 12px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: bold;
-        margin-left: 8px;
+        background: #e3f2fd;
+        color: #1976d2;
+        margin: 2px;
     }
-    .badge-success { background: #E8F5E8; color: #2E7D32; }
-    .badge-warning { background: #FFF3E0; color: #EF6C00; }
-    .badge-danger { background: #FFEBEE; color: #C62828; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -637,41 +636,143 @@ elif menu == "📦 Stock":
                 hide_index=True
             )
             
-            # Mostrar resumen de stock por tela
+            # MEJORADO: Resumen por Tipo de Tela con Gráfico de Barras
+            st.markdown("---")
             st.subheader("📊 Resumen por Tipo de Tela")
             
-            # Agrupar por tipo de tela
+            # Agrupar por tipo de tela para el gráfico
             resumen_telas = df_filtrado.groupby("Tipo de tela").agg({
-                "Rollos": ["sum", "count"],
+                "Rollos": "sum",
                 "Color": "nunique"
-            }).round(0)
+            }).round(0).reset_index()
             
-            resumen_telas.columns = ["Total Rollos", "Registros", "Colores"]
+            resumen_telas.columns = ["Tipo de Tela", "Total Rollos", "Cantidad Colores"]
             resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
             
-            # Mostrar cards para cada tela
-            cols = st.columns(2)
-            for idx, (tela, datos) in enumerate(resumen_telas.iterrows()):
-                with cols[idx % 2]:
-                    total_rollos = int(datos["Total Rollos"])
-                    num_colores = int(datos["Colores"])
+            # Crear dos columnas: gráfico a la izquierda, datos a la derecha
+            col_grafico, col_datos = st.columns([2, 1])
+            
+            with col_grafico:
+                # Crear gráfico de barras
+                fig = px.bar(
+                    resumen_telas,
+                    x="Tipo de Tela",
+                    y="Total Rollos",
+                    title="Stock por Tipo de Tela",
+                    labels={"Total Rollos": "Cantidad de Rollos", "Tipo de Tela": ""},
+                    color="Total Rollos",
+                    color_continuous_scale=["#FF9800", "#4CAF50", "#2196F3"],
+                    text="Total Rollos"
+                )
+                
+                # Mejorar el diseño del gráfico
+                fig.update_traces(
+                    texttemplate='%{text} rollos',
+                    textposition='outside',
+                    marker_line_color='rgb(8,48,107)',
+                    marker_line_width=1.5
+                )
+                
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    showlegend=False,
+                    xaxis_tickangle=-45,
+                    height=400,
+                    yaxis_title="Cantidad de Rollos",
+                    font=dict(size=12)
+                )
+                
+                # Configurar ejes
+                fig.update_xaxis(showgrid=False)
+                fig.update_yaxis(showgrid=True, gridwidth=1, gridcolor='LightGrey')
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col_datos:
+                st.subheader("📈 Detalles por Tela")
+                
+                # Mostrar cards con información detallada
+                for _, tela_data in resumen_telas.iterrows():
+                    tela = tela_data["Tipo de Tela"]
+                    total_rollos = int(tela_data["Total Rollos"])
+                    num_colores = int(tela_data["Cantidad Colores"])
                     
-                    # Determinar clase CSS
-                    card_class = "stock-card"
+                    # Obtener colores específicos para esta tela
+                    colores_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela]["Color"].unique()
+                    
+                    # Determinar color de borde según stock
+                    border_color = "#4CAF50"  # Verde por defecto
                     if total_rollos < 5:
-                        card_class += " stock-low"
-                    elif total_rollos == 0:
-                        card_class += " stock-zero"
+                        border_color = "#FF9800"  # Naranja
+                    elif total_rollos < 2:
+                        border_color = "#F44336"  # Rojo
                     
                     st.markdown(f"""
-                    <div class="{card_class}">
-                        <h4>🎨 {tela}</h4>
-                        <p><strong>📦 Rollos:</strong> {total_rollos}</p>
-                        <p><strong>🎨 Colores:</strong> {num_colores}</p>
+                    <div style='
+                        background: white; 
+                        padding: 12px; 
+                        border-radius: 8px; 
+                        border-left: 4px solid {border_color};
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        margin-bottom: 10px;
+                    '>
+                        <div style='font-weight: bold; font-size: 14px;'>🎨 {tela}</div>
+                        <div style='font-size: 20px; font-weight: bold; color: #2c3e50;'>{total_rollos} rollos</div>
+                        <div style='font-size: 12px; color: #666;'>
+                            🎨 {num_colores} color{'' if num_colores == 1 else 'es'}
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Mostrar colores disponibles (solo si hay pocos)
+                    if len(colores_tela) <= 6:
+                        colores_texto = " • ".join(sorted(colores_tela))
+                        st.caption(f"🎨 {colores_texto}")
             
-            # Cálculos de valorización
+            # Gráfico adicional: Distribución de colores por tela
+            st.markdown("---")
+            st.subheader("🎨 Distribución de Colores por Tela")
+            
+            col_graf1, col_graf2 = st.columns(2)
+            
+            with col_graf1:
+                # Gráfico de torta para distribución de stock
+                fig_torta = px.pie(
+                    resumen_telas,
+                    values="Total Rollos",
+                    names="Tipo de Tela",
+                    title="Distribución % del Stock Total",
+                    hole=0.4
+                )
+                fig_torta.update_traces(textposition='inside', textinfo='percent+label')
+                fig_torta.update_layout(height=300)
+                st.plotly_chart(fig_torta, use_container_width=True)
+            
+            with col_graf2:
+                # Gráfico de colores por tela
+                fig_colores = px.bar(
+                    resumen_telas,
+                    x="Tipo de Tela",
+                    y="Cantidad Colores",
+                    title="Cantidad de Colores por Tela",
+                    labels={"Cantidad Colores": "N° de Colores", "Tipo de Tela": ""},
+                    color="Cantidad Colores",
+                    color_continuous_scale="Viridis",
+                    text="Cantidad Colores"
+                )
+                fig_colores.update_traces(
+                    texttemplate='%{text} colores',
+                    textposition='outside'
+                )
+                fig_colores.update_layout(
+                    plot_bgcolor='white',
+                    showlegend=False,
+                    height=300,
+                    xaxis_tickangle=-45
+                )
+                st.plotly_chart(fig_colores, use_container_width=True)
+            
+            # Cálculos de valorización (mantener esta sección igual)
             st.markdown("---")
             st.subheader("💰 Valorización del Stock")
             
@@ -743,23 +844,6 @@ elif menu == "📦 Stock":
                         st.metric("💲 Valor Total", formato_argentino_moneda(total_valorizado))
                     else:
                         st.metric("💲 Valor Total", "USD -")
-                
-                # Mostrar detalles por tela si hay múltiples telas
-                if len(filtro_tela) > 1:
-                    st.subheader("📈 Detalle por Tela")
-                    
-                    for tela in filtro_tela:
-                        rollos_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela]["Rollos"].sum()
-                        precio_tela = precios_telas.get(tela, 0)
-                        valor_tela = rollos_tela * precio_tela
-                        
-                        col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
-                        with col_d1:
-                            st.write(f"**{tela}**")
-                        with col_d2:
-                            st.write(f"Rollos: {rollos_tela}")
-                        with col_d3:
-                            st.write(f"Valor: {formato_argentino_moneda(valor_tela)}")
             
             else:
                 st.info("ℹ️ No hay información de precios disponible para valorización")
@@ -1899,6 +1983,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
