@@ -519,109 +519,261 @@ elif menu == "📊 Resumen Compras":
 # STOCK
 # -------------------------------
 elif menu == "📦 Stock":
-    st.header("Stock disponible (en rollos)")
+    st.header("📦 Stock disponible (en rollos)")
+    
+    # Agregar algunos estilos CSS para mejor visualización
+    st.markdown("""
+    <style>
+    .stock-card {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #4CAF50;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin: 10px 0;
+    }
+    .stock-low {
+        border-left-color: #FF9800;
+        background-color: #FFF3E0;
+    }
+    .stock-zero {
+        border-left-color: #F44336;
+        background-color: #FFEBEE;
+    }
+    .kpi-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 8px;
+    }
+    .badge-success { background: #E8F5E8; color: #2E7D32; }
+    .badge-warning { background: #FFF3E0; color: #EF6C00; }
+    .badge-danger { background: #FFEBEE; color: #C62828; }
+    </style>
+    """, unsafe_allow_html=True)
 
     df = get_stock_resumen()
     if df.empty:
         st.warning("No hay stock registrado")
     else:
-        filtro_tela = st.multiselect("Filtrar por tela", df["Tipo de tela"].unique())
-        filtro_color = st.multiselect("Filtrar por color", df["Color"].unique())
+        # Crear DataFrames separados para filtros
+        df_con_stock = df[df["Rollos"] > 0]
+        df_sin_stock = df[df["Rollos"] == 0]
+        
+        # Mostrar resumen rápido
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Total Telas", len(df["Tipo de tela"].unique()))
+        with col2:
+            st.metric("✅ Con Stock", len(df_con_stock["Tipo de tela"].unique()))
+        with col3:
+            st.metric("❌ Sin Stock", len(df_sin_stock["Tipo de tela"].unique()))
+        with col4:
+            st.metric("🎨 Colores Activos", len(df_con_stock["Color"].unique()))
+        
+        # Filtros SOLO con telas que tienen stock
+        st.subheader("🔍 Filtros")
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            # Solo mostrar telas que tienen stock > 0
+            telas_con_stock = sorted(df_con_stock["Tipo de tela"].unique())
+            filtro_tela = st.multiselect(
+                "Filtrar por tela", 
+                telas_con_stock,
+                placeholder="Todas las telas con stock"
+            )
+        
+        with col_f2:
+            # Filtrar colores basado en las telas seleccionadas
+            if filtro_tela:
+                colores_filtrados = df_con_stock[df_con_stock["Tipo de tela"].isin(filtro_tela)]["Color"].unique()
+            else:
+                colores_filtrados = df_con_stock["Color"].unique()
+            
+            filtro_color = st.multiselect(
+                "Filtrar por color", 
+                sorted(colores_filtrados),
+                placeholder="Todos los colores"
+            )
 
-        df_filtrado = df.copy()
+        # Aplicar filtros
+        df_filtrado = df_con_stock.copy()  # Ya partimos de stock > 0
+        
         if filtro_tela:
             df_filtrado = df_filtrado[df_filtrado["Tipo de tela"].isin(filtro_tela)]
         if filtro_color:
             df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
         
-        # ⬇️⬇️⬇️ FILTRAR Y OCULTAR STOCK EN CERO ⬇️⬇️⬇️
-        df_filtrado = df_filtrado[df_filtrado["Rollos"] > 0]
-        # ⬆️⬆️⬆️ ESTA LÍNEA OCULTA COMPLETAMENTE EL STOCK 0 ⬆️⬆️⬆️
-
+        # Mostrar tabla con mejor formato
         if not df_filtrado.empty:
-            st.dataframe(df_filtrado, use_container_width=True)
+            st.subheader("📋 Stock Disponible")
             
-            total_rollos = df_filtrado["Rollos"].sum()
+            # Crear una copia para mostrar con mejor formato
+            df_mostrar = df_filtrado.copy()
             
-            # Mostrar totales
+            # Agregar indicadores visuales
+            def estilo_fila(row):
+                rollos = row["Rollos"]
+                if rollos >= 10:
+                    return "✅ Stock suficiente"
+                elif rollos >= 5:
+                    return "⚠️ Stock medio"
+                else:
+                    return "🔴 Stock bajo"
+            
+            df_mostrar["Estado"] = df_mostrar.apply(estilo_fila, axis=1)
+            
+            # Reordenar columnas
+            column_order = ["Tipo de tela", "Color", "Rollos", "Estado"]
+            df_mostrar = df_mostrar[column_order]
+            
+            # Mostrar tabla
+            st.dataframe(
+                df_mostrar, 
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Mostrar resumen de stock por tela
+            st.subheader("📊 Resumen por Tipo de Tela")
+            
+            # Agrupar por tipo de tela
+            resumen_telas = df_filtrado.groupby("Tipo de tela").agg({
+                "Rollos": ["sum", "count"],
+                "Color": "nunique"
+            }).round(0)
+            
+            resumen_telas.columns = ["Total Rollos", "Registros", "Colores"]
+            resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
+            
+            # Mostrar cards para cada tela
+            cols = st.columns(2)
+            for idx, (tela, datos) in enumerate(resumen_telas.iterrows()):
+                with cols[idx % 2]:
+                    total_rollos = int(datos["Total Rollos"])
+                    num_colores = int(datos["Colores"])
+                    
+                    # Determinar clase CSS
+                    card_class = "stock-card"
+                    if total_rollos < 5:
+                        card_class += " stock-low"
+                    elif total_rollos == 0:
+                        card_class += " stock-zero"
+                    
+                    st.markdown(f"""
+                    <div class="{card_class}">
+                        <h4>🎨 {tela}</h4>
+                        <p><strong>📦 Rollos:</strong> {total_rollos}</p>
+                        <p><strong>🎨 Colores:</strong> {num_colores}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Cálculos de valorización
             st.markdown("---")
-            col1, col2 = st.columns(2)
+            st.subheader("💰 Valorización del Stock")
             
-            with col1:
-                st.metric("📊 Total de rollos", total_rollos)
+            # Obtener datos de compras para precios
+            df_compras = get_compras_resumen()
             
-            with col2:
-                if filtro_tela and len(filtro_tela) == 1:
-                    tela_seleccionada = filtro_tela[0]
-                    df_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela_seleccionada]
-                    if not df_tela.empty:
-                        # Aquí puedes calcular el precio promedio si tienes esa data
-                        # st.metric("💰 Precio promedio x rollo", "USD 598,15")
-                        st.metric("💰 Precio promedio x rollo", "USD -")
+            if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
+                # Función para convertir formato argentino
+                def convertir_formato_argentino(valor):
+                    if pd.isna(valor):
+                        return 0.0
+                    if isinstance(valor, (int, float)):
+                        return float(valor)
+                    valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
+                    try:
+                        if "." in valor_str and "," in valor_str:
+                            return float(valor_str.replace(".", "").replace(",", "."))
+                        elif "," in valor_str:
+                            return float(valor_str.replace(",", "."))
+                        else:
+                            return float(valor_str)
+                    except:
+                        return 0.0
+                
+                # Función para formatear en estilo argentino
+                def formato_argentino_moneda(valor):
+                    if pd.isna(valor) or valor == 0:
+                        return "USD 0,00"
+                    formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    return f"USD {formatted}"
+                
+                # Convertir precios
+                df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
+                
+                # Calcular valorización
+                total_rollos_filtrado = df_filtrado["Rollos"].sum()
+                precios_telas = {}
+                
+                # Si hay filtro de telas, calcular por cada una
+                if filtro_tela:
+                    for tela in filtro_tela:
+                        precio_promedio_tela = df_compras[
+                            df_compras["Tipo de tela"] == tela
+                        ]["Precio promedio x rollo num"].mean()
+                        
+                        if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
+                            precios_telas[tela] = precio_promedio_tela
+                
+                # Mostrar métricas de valorización
+                col_v1, col_v2, col_v3 = st.columns(3)
+                
+                with col_v1:
+                    st.metric("📦 Total Rollos", total_rollos_filtrado)
+                
+                with col_v2:
+                    if precios_telas:
+                        if len(precios_telas) == 1:
+                            precio_promedio = list(precios_telas.values())[0]
+                        else:
+                            precio_promedio = sum(precios_telas.values()) / len(precios_telas)
+                        
+                        st.metric("💰 Precio Promedio", formato_argentino_moneda(precio_promedio))
+                    else:
+                        st.metric("💰 Precio Promedio", "USD -")
+                
+                with col_v3:
+                    if precios_telas:
+                        total_valorizado = total_rollos_filtrado * precio_promedio
+                        st.metric("💲 Valor Total", formato_argentino_moneda(total_valorizado))
+                    else:
+                        st.metric("💲 Valor Total", "USD -")
+                
+                # Mostrar detalles por tela si hay múltiples telas
+                if len(filtro_tela) > 1:
+                    st.subheader("📈 Detalle por Tela")
+                    
+                    for tela in filtro_tela:
+                        rollos_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela]["Rollos"].sum()
+                        precio_tela = precios_telas.get(tela, 0)
+                        valor_tela = rollos_tela * precio_tela
+                        
+                        col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
+                        with col_d1:
+                            st.write(f"**{tela}**")
+                        with col_d2:
+                            st.write(f"Rollos: {rollos_tela}")
+                        with col_d3:
+                            st.write(f"Valor: {formato_argentino_moneda(valor_tela)}")
+            
+            else:
+                st.info("ℹ️ No hay información de precios disponible para valorización")
+                
         else:
             st.info("ℹ️ No hay stock disponible con los filtros aplicados")
         
-        # Obtener el resumen de compras para calcular precios promedios
-        df_compras = get_compras_resumen()
-        
-        st.subheader("Totales de la selección")
-        st.write(f"📦 Total de rollos: {total_rollos}")
-        
-        # 1. Mostrar precio promedio por tipo de tela seleccionado
-        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-            # Función para convertir correctamente el formato argentino
-            def convertir_formato_argentino(valor):
-                if pd.isna(valor):
-                    return 0.0
-                if isinstance(valor, (int, float)):
-                    return float(valor)
-                valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
-                try:
-                    # Si tiene formato 15.012,00 -> convertir a 15012.00
-                    if "." in valor_str and "," in valor_str:
-                        return float(valor_str.replace(".", "").replace(",", "."))
-                    # Si tiene formato 150,12 -> convertir a 150.12
-                    elif "," in valor_str:
-                        return float(valor_str.replace(",", "."))
-                    else:
-                        return float(valor_str)
-                except:
-                    return 0.0
-            
-            # Función para formatear en estilo argentino
-            def formato_argentino_moneda(valor):
-                if pd.isna(valor) or valor == 0:
-                    return "USD 0,00"
-                formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                return f"USD {formatted}"
-            
-            # Convertir la columna de precios
-            df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
-            
-            # Calcular precio promedio por tipo de tela si hay filtro
-            precios_telas = {}
-            if filtro_tela:
-                for tela in filtro_tela:
-                    precio_promedio_tela = df_compras[
-                        df_compras["Tipo de tela"] == tela
-                    ]["Precio promedio x rollo num"].mean()
-                    
-                    if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
-                        # CORRECCIÓN: No dividir por 100 aquí
-                        precio_corregido = precio_promedio_tela
-                        precios_telas[tela] = precio_corregido
-                        st.write(f"💲 Precio promedio x rollo ({tela}): {formato_argentino_moneda(precio_corregido)}")
-            
-            # 2. Calcular valor estimado CORRECTAMENTE
-            if precios_telas:
-                if len(precios_telas) == 1:
-                    precio_promedio_global = list(precios_telas.values())[0]
-                else:
-                    precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
-                
-                # CORRECCIÓN: Calcular directamente sin dividir por 100
-                total_valorizado = total_rollos * precio_promedio_global
-                st.write(f"💲 Valor estimado (rollos × precio promedio): {formato_argentino_moneda(total_valorizado)}")
+        # Sección informativa sobre stock cero (opcional)
+        with st.expander("📋 Ver telas sin stock"):
+            if not df_sin_stock.empty:
+                st.write("Estas telas aparecerán cuando tengan stock disponible:")
+                st.dataframe(df_sin_stock[["Tipo de tela", "Color", "Rollos"]], use_container_width=True)
+            else:
+                st.success("🎉 ¡Todas las telas tienen stock disponible!")
                     
 # -------------------------------
 # CORTES
@@ -1747,6 +1899,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
