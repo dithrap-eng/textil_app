@@ -754,7 +754,7 @@ elif menu == "📦 Stock":
                 st.success("🎉 ¡Todas las telas tienen stock disponible!")
                     
 # -------------------------------
-# CORTES
+# CORTES (CON DESGLOSE POR ROLLOS Y TOTALES AUTOMÁTICOS)
 # -------------------------------
 elif menu == "✂ Cortes":
     st.header("Registrar corte de tela")
@@ -767,9 +767,8 @@ elif menu == "✂ Cortes":
     telas = df_stock["Tipo de tela"].unique() if not df_stock.empty else []
     tipo_tela = st.selectbox("Tela usada", telas if len(telas) else ["---"])
 
-    # --- MODIFICACIÓN: Filtrar colores con stock > 0 ---
+    # Filtrar colores con stock > 0
     if not df_stock.empty and tipo_tela != "---":
-        # Filtrar por tipo de tela y stock mayor a 0
         stock_tela = df_stock[df_stock["Tipo de tela"] == tipo_tela]
         colores_con_stock = stock_tela[stock_tela["Rollos"] > 0]["Color"].unique()
         colores_sin_stock = stock_tela[stock_tela["Rollos"] == 0]["Color"].unique()
@@ -787,119 +786,204 @@ elif menu == "✂ Cortes":
     if len(colores_sin_stock) > 0:
         st.info(f"ℹ️ Colores sin stock disponible: {', '.join(colores_sin_stock)}")
 
-    lineas = []
-    
     # ================================
-    # GESTIÓN DE COLORES Y TALLES
+    # MODO DE CARGA: TOTALES vs DESGLOSE POR ROLLO
     # ================================
     st.subheader("📊 Gestión de Colores y Talles")
     
-    talles = [5, 6, 7, 8, 9, 10]
-    tabla_data = {}
-    lineas = []
-    totales_x_color = []
-    totales_rollos = []
-    
     if colores_sel:
-        st.write("Complete las cantidades por color y talle:")
-    
-        # Encabezado
-        cols = st.columns(len(talles) + 4)  # +4 = Color + Total x color + Stock actual + Total rollos
-        cols[0].markdown("**Color**")
-        for j, t in enumerate(talles):
-            cols[j+1].markdown(f"**{t}**")
-        cols[-3].markdown("**Total x color**")
-        cols[-2].markdown("**Stock actual**")
-        cols[-1].markdown("**Total rollos**")
-    
-        # Filas dinámicas por color
-        for c in colores_sel:
-            valores_fila = []
-            total_color = 0
-    
+        # Selección del modo de carga
+        modo_carga = st.radio(
+            "Seleccione el modo de carga:",
+            ["📋 Por totales (actual)", "📦 Desglosado por rollos"],
+            help="""Por totales: Carga cantidades totales por color\nDesglosado por rollos: Crea una fila por cada rollo utilizado"""
+        )
+        
+        talles = [5, 6, 7, 8, 9, 10]
+        lineas = []
+        suma_total_color = 0
+        
+        if modo_carga == "📋 Por totales (actual)":
+            # MODO ACTUAL (TOTALES)
+            tabla_data = {}
+            totales_x_color = []
+            totales_rollos = []
+            
+            st.write("Complete las cantidades por color y talle:")
+        
+            # Encabezado
             cols = st.columns(len(talles) + 4)
-            cols[0].write(f"🎨 {c}")
-    
+            cols[0].markdown("**Color**")
             for j, t in enumerate(talles):
-                val = cols[j+1].number_input(
-                    f"{c}_{t}",
-                    min_value=0,
-                    step=1,
-                    key=f"{c}_{t}"
+                cols[j+1].markdown(f"**{t}**")
+            cols[-3].markdown("**Total x color**")
+            cols[-2].markdown("**Stock actual**")
+            cols[-1].markdown("**Total rollos**")
+        
+            # Filas dinámicas por color
+            for c in colores_sel:
+                valores_fila = []
+                total_color = 0
+        
+                cols = st.columns(len(talles) + 4)
+                cols[0].write(f"🎨 {c}")
+        
+                for j, t in enumerate(talles):
+                    val = cols[j+1].number_input(
+                        f"{c}_{t}",
+                        min_value=0,
+                        step=1,
+                        key=f"total_{c}_{t}"
+                    )
+                    valores_fila.append(val)
+                    total_color += val
+        
+                # Total x color (resaltado)
+                cols[-3].markdown(
+                    f"<div style='background-color:#ffcccb; color:black; text-align:center; padding:6px; "
+                    f"border-radius:6px; font-weight:bold;'>{total_color}</div>",
+                    unsafe_allow_html=True
                 )
-                valores_fila.append(val)
-                total_color += val
-    
-            # Total x color (resaltado)
+        
+                # Stock real desde df_stock
+                stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & 
+                                           (df_stock["Color"] == c)]["Rollos"].sum())
+        
+                # Campo manual para rollos consumidos
+                total_rollos = cols[-1].number_input(
+                    f"Rollos {c}",
+                    min_value=0,
+                    max_value=stock_color,
+                    step=1,
+                    key=f"rollos_total_{c}"
+                )
+        
+                # Stock actualizado dinámicamente
+                stock_disp = stock_color - total_rollos
+                if stock_disp > 5:
+                    cols[-2].success(f"{stock_disp}")
+                elif stock_disp > 2:
+                    cols[-2].warning(f"{stock_disp}")
+                else:
+                    cols[-2].error(f"{stock_disp}")
+        
+                # Guardar info
+                tabla_data[c] = valores_fila
+                lineas.append({"color": c, "rollos": total_rollos})
+        
+                totales_x_color.append(total_color)
+                totales_rollos.append(total_rollos)
+                suma_total_color += total_color
+        
+            # Totales por columna (x talle)
+            st.markdown("---")
+            cols = st.columns(len(talles) + 4)
+            cols[0].markdown("**Total x talle**")
+            for j, t in enumerate(talles):
+                suma_col = sum(tabla_data[c][j] for c in colores_sel)
+                cols[j+1].markdown(
+                    f"<div style='background-color:#d1e7dd; padding:6px; border-radius:6px; text-align:center;'><b>{suma_col}</b></div>",
+                    unsafe_allow_html=True
+                )
+        
+            # Totales generales
+            suma_total_rollos = sum(totales_rollos)
+        
             cols[-3].markdown(
-                f"<div style='background-color:#ffcccb; color:black; text-align:center; padding:6px; "
-                f"border-radius:6px; font-weight:bold;'>{total_color}</div>",
+                f"<div style='background-color:#dc3545; color:white; padding:8px; border-radius:8px; text-align:center; font-size:16px; font-weight:bold;'>"
+                f"{suma_total_color}</div>",
                 unsafe_allow_html=True
             )
-    
-            # Stock real desde df_stock
-            stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & 
-                                       (df_stock["Color"] == c)]["Rollos"].sum())
-    
-            # Campo manual para rollos consumidos
-            total_rollos = cols[-1].number_input(
-                f"Rollos {c}",
-                min_value=0,
-                max_value=stock_color,  # límite por stock
-                step=1,
-                key=f"rollos_{c}"
-            )
-    
-            # Stock actualizado dinámicamente
-            stock_disp = stock_color - total_rollos
-            if stock_disp > 5:
-                cols[-2].success(f"{stock_disp}")
-            elif stock_disp > 2:
-                cols[-2].warning(f"{stock_disp}")
-            else:
-                cols[-2].error(f"{stock_disp}")
-    
-            # Guardar info en estructuras
-            tabla_data[c] = valores_fila
-            lineas.append({"color": c, "rollos": total_rollos})
-    
-            totales_x_color.append(total_color)
-            totales_rollos.append(total_rollos)
-    
-        # Totales por columna (x talle)
-        st.markdown("---")
-        cols = st.columns(len(talles) + 4)
-        cols[0].markdown("**Total x talle**")
-        for j, t in enumerate(talles):
-            suma_col = sum(tabla_data[c][j] for c in colores_sel)
-            cols[j+1].markdown(
-                f"<div style='background-color:#d1e7dd; padding:6px; border-radius:6px; text-align:center;'><b>{suma_col}</b></div>",
+            cols[-2].markdown(" ")
+            cols[-1].markdown(
+                f"<div style='background-color:#0d6efd; color:white; padding:8px; border-radius:8px; text-align:center; font-size:16px; font-weight:bold;'>"
+                f"{suma_total_rollos}</div>",
                 unsafe_allow_html=True
             )
-    
-        # Totales generales
-        suma_total_color = sum(totales_x_color)
-        suma_total_rollos = sum(totales_rollos)
-    
-        cols[-3].markdown(
-            f"<div style='background-color:#dc3545; color:white; padding:8px; border-radius:8px; text-align:center; font-size:16px; font-weight:bold;'>"
-            f"{suma_total_color}</div>",
-            unsafe_allow_html=True
-        )
-        cols[-2].markdown(" ")  # vacío porque stock no se suma
-        cols[-1].markdown(
-            f"<div style='background-color:#0d6efd; color:white; padding:8px; border-radius:8px; text-align:center; font-size:16px; font-weight:bold;'>"
-            f"{suma_total_rollos}</div>",
-            unsafe_allow_html=True
-        )
+            
+        else:
+            # MODO DESGLOSADO POR ROLLOS
+            st.info("💡 **Modo desglosado:** Se creará una fila por cada rollo utilizado")
+            
+            for c in colores_sel:
+                st.markdown(f"### 🎨 Color: {c}")
+                
+                # Stock disponible para este color
+                stock_color = int(df_stock[(df_stock["Tipo de tela"] == tipo_tela) & 
+                                           (df_stock["Color"] == c)]["Rollos"].sum())
+                
+                # Número de rollos a utilizar
+                num_rollos = st.number_input(
+                    f"¿Cuántos rollos de {c} utilizará?",
+                    min_value=1,
+                    max_value=stock_color,
+                    value=1,
+                    step=1,
+                    key=f"num_rollos_{c}"
+                )
+                
+                # Crear filas para cada rollo
+                total_color = 0
+                for rollo_num in range(1, num_rollos + 1):
+                    st.write(f"**Rollo {rollo_num} de {c}:**")
+                    
+                    # Crear columnas para talles
+                    cols_rollo = st.columns(len(talles))
+                    valores_rollo = []
+                    
+                    for j, t in enumerate(talles):
+                        val = cols_rollo[j].number_input(
+                            f"{c}_rollo{rollo_num}_{t}",
+                            min_value=0,
+                            step=1,
+                            key=f"rollo_{c}_{rollo_num}_{t}",
+                            label_visibility="collapsed"
+                        )
+                        valores_rollo.append(val)
+                        total_color += val
+                    
+                    # Agregar a lineas (cada rollo es una línea separada)
+                    lineas.append({"color": c, "rollos": 1})
+                    
+                    # Mostrar subtotal del rollo
+                    st.caption(f"Subtotal rollo {rollo_num}: {sum(valores_rollo)} prendas")
+                
+                # Mostrar total del color
+                st.success(f"**Total {c}:** {total_color} prendas en {num_rollos} rollo{'s' if num_rollos > 1 else ''}")
+                suma_total_color += total_color
+                
+                # Mostrar stock restante
+                stock_restante = stock_color - num_rollos
+                if stock_restante > 5:
+                    st.info(f"📦 Stock restante de {c}: {stock_restante} rollos")
+                elif stock_restante > 0:
+                    st.warning(f"📦 Stock restante de {c}: {stock_restante} rollos")
+                else:
+                    st.error(f"📦 ¡Sin stock restante de {c}!")
+                
+                st.markdown("---")
+            
+            # Resumen general del modo desglosado
+            st.subheader("📊 Resumen General")
+            total_rollos_usados = len([l for l in lineas if l["rollos"] > 0])
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("🎨 Colores utilizados", len(colores_sel))
+            with col2:
+                st.metric("📦 Rollos totales", total_rollos_usados)
+            with col3:
+                st.metric("👕 Total prendas", suma_total_color)
     
     else:
         if tipo_tela != "---" and len(colores_con_stock) == 0:
             st.warning("⚠️ No hay colores con stock disponible para la tela seleccionada")
         else:
-            st.info("Seleccione colores para habilitar la tabla de talles.")
+            st.info("Seleccione colores para habilitar la gestión de talles.")
 
-    # Sección de consumo y prendas
+    # ================================
+    # DATOS DE PRODUCCIÓN (MEJORADO)
+    # ================================
     st.markdown("---")
     st.subheader("📦 Datos de Producción")
     
@@ -909,9 +993,17 @@ elif menu == "✂ Cortes":
         consumo_total = st.number_input("Consumo total (m)", min_value=0.0, step=0.5, format="%.2f")
     
     with col_prendas:
-        prendas = st.number_input("Cantidad de prendas", min_value=1, step=1)
+        # AUTOMÁTICO: Usar el total calculado en la sección anterior
+        prendas_auto = suma_total_color if 'suma_total_color' in locals() and suma_total_color > 0 else 0
+        prendas = st.number_input(
+            "Cantidad de prendas", 
+            min_value=1, 
+            step=1,
+            value=prendas_auto if prendas_auto > 0 else 1,
+            help="Se sugiere automáticamente el total de prendas calculado arriba"
+        )
     
-    # Mostrar consumo por prenda con mejor diseño
+    # Mostrar consumo por prenda
     if prendas > 0 and consumo_total > 0:
         consumo_x_prenda = consumo_total / prendas
         st.metric(
@@ -922,22 +1014,35 @@ elif menu == "✂ Cortes":
     else:
         st.info("ℹ️ Complete consumo total y cantidad de prendas para calcular el consumo por prenda")
 
-    # Botón de guardar con mejor diseño
+    # Información adicional
+    if colores_sel and 'suma_total_color' in locals() and suma_total_color > 0:
+        if prendas != suma_total_color:
+            st.warning(f"💡 El total de prendas calculado en colores y talles es: **{suma_total_color}**")
+        else:
+            st.success(f"✅ Total de prendas coincidente: **{suma_total_color}**")
+
+    # Botón de guardar
     st.markdown("---")
     col_btn, _ = st.columns([1, 3])
     
     with col_btn:
         if st.button("💾 Guardar corte", type="primary", use_container_width=True):
+            # Validaciones
             if not colores_sel:
                 st.error("❌ Debe seleccionar al menos un color")
             elif consumo_total <= 0:
                 st.error("❌ El consumo total debe ser mayor a 0")
             elif prendas <= 0:
                 st.error("❌ La cantidad de prendas debe ser mayor a 0")
+            elif 'lineas' not in locals() or not lineas:
+                st.error("❌ Debe completar la información de colores y talles")
             else:
-                insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
-                st.success("✅ Corte registrado y stock actualizado correctamente")
-                st.balloons()
+                try:
+                    insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
+                    st.success("✅ Corte registrado y stock actualizado correctamente")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"❌ Error al guardar el corte: {str(e)}")
 
   # -------------------------------
     # RESUMEN DE CORTES (VERSIÓN CORREGIDA)
@@ -1877,6 +1982,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
