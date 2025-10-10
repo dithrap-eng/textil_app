@@ -71,7 +71,13 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     ])
 
     for l in lineas:
-        ws_detalle.append_row([corte_id, l["color"], l["rollos"]])
+        # AGREGAR TIPO DE TELA AL DETALLE
+        ws_detalle.append_row([
+            corte_id, 
+            l["color"], 
+            l["rollos"],
+            l["tipo_tela"]  # NUEVO CAMPO
+        ])
 
     ws_detalle_compras = spreadsheet.worksheet("Detalle_Compras")
     data = ws_detalle_compras.get_all_records()
@@ -85,7 +91,7 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
             if new_value < 0:
                 new_value = 0
             ws_detalle_compras.update_cell(row, 4, new_value)
-
+            
 # =====================
 # CONSULTAS
 # =====================
@@ -2051,6 +2057,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
