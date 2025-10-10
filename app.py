@@ -646,6 +646,62 @@ elif menu == "📦 Stock":
         else:
             st.info("ℹ️ No hay stock disponible con los filtros aplicados")
         
+          # 1. Mostrar precio promedio por tipo de tela seleccionado
+        if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
+            # Función para convertir correctamente el formato argentino
+            def convertir_formato_argentino(valor):
+                if pd.isna(valor):
+                    return 0.0
+                if isinstance(valor, (int, float)):
+                    return float(valor)
+                valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
+                try:
+                    # Si tiene formato 15.012,00 -> convertir a 15012.00
+                    if "." in valor_str and "," in valor_str:
+                        return float(valor_str.replace(".", "").replace(",", "."))
+                    # Si tiene formato 150,12 -> convertir a 150.12
+                    elif "," in valor_str:
+                        return float(valor_str.replace(",", "."))
+                    else:
+                        return float(valor_str)
+                except:
+                    return 0.0
+            
+            # Función para formatear en estilo argentino
+            def formato_argentino_moneda(valor):
+                if pd.isna(valor) or valor == 0:
+                    return "USD 0,00"
+                formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                return f"USD {formatted}"
+            
+            # Convertir la columna de precios
+            df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
+            
+            # Calcular precio promedio por tipo de tela si hay filtro
+            precios_telas = {}
+            if filtro_tela:
+                for tela in filtro_tela:
+                    precio_promedio_tela = df_compras[
+                        df_compras["Tipo de tela"] == tela
+                    ]["Precio promedio x rollo num"].mean()
+                    
+                    if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
+                        # CORRECCIÓN: No dividir por 100 aquí
+                        precio_corregido = precio_promedio_tela
+                        precios_telas[tela] = precio_corregido
+                        st.write(f"💲 Precio promedio x rollo ({tela}): {formato_argentino_moneda(precio_corregido)}")
+            
+            # 2. Calcular valor estimado CORRECTAMENTE
+            if precios_telas:
+                if len(precios_telas) == 1:
+                    precio_promedio_global = list(precios_telas.values())[0]
+                else:
+                    precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
+                
+                # CORRECCIÓN: Calcular directamente sin dividir por 100
+                total_valorizado = total_rollos * precio_promedio_global
+                st.write(f"💲 Valor estimado (rollos × precio promedio): {formato_argentino_moneda(total_valorizado)}")
+        
         # Sección informativa sobre stock cero
         with st.expander("📋 Ver telas sin stock"):
             if not df_sin_stock.empty:
@@ -1778,6 +1834,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
