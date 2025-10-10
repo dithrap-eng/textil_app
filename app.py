@@ -577,9 +577,9 @@ elif menu == "📦 Stock":
             # Agregar indicadores visuales
             def estilo_fila(row):
                 rollos = row["Rollos"]
-                if rollos >= 10:
+                if rollos >= 7:
                     return "✅ Buen stock"
-                elif rollos >= 5:
+                elif rollos >= 3:
                     return "⚠️ Stock medio"
                 else:
                     return "🔴 Stock bajo"
@@ -626,19 +626,6 @@ elif menu == "📦 Stock":
                     </div>
                     """, unsafe_allow_html=True)
             
-            with col_datos:
-                st.write("**Detalles por Tela:**")
-                for tela, datos in resumen_telas.iterrows():
-                    rollos = int(datos["Total Rollos"])
-                    colores = int(datos["Cantidad Colores"])
-                    
-                    st.markdown(f"""
-                    <div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;'>
-                        <div style='font-weight: bold;'>{tela}</div>
-                        <div>📦 {rollos} rollos</div>
-                        <div>🎨 {colores} colores</div>
-                    </div>
-                    """, unsafe_allow_html=True)
             
             # Totales generales
             st.markdown("---")
@@ -1791,6 +1778,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
