@@ -516,61 +516,27 @@ elif menu == "📊 Resumen Compras":
 
 
 # -------------------------------
-# STOCK
+# STOCK (VERSIÓN SIMPLIFICADA)
 # -------------------------------
 elif menu == "📦 Stock":
     st.header("📦 Stock disponible (en rollos)")
-    
-    # Agregar algunos estilos CSS para mejor visualización
-    st.markdown("""
-    <style>
-    .stock-card {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        border-left: 4px solid #4CAF50;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin: 10px 0;
-    }
-    .stock-low {
-        border-left-color: #FF9800;
-        background-color: #FFF3E0;
-    }
-    .stock-zero {
-        border-left-color: #F44336;
-        background-color: #FFEBEE;
-    }
-    .color-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: bold;
-        background: #e3f2fd;
-        color: #1976d2;
-        margin: 2px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
     df = get_stock_resumen()
     if df.empty:
         st.warning("No hay stock registrado")
     else:
-        # Crear DataFrames separados para filtros
+        # Crear DataFrames separados
         df_con_stock = df[df["Rollos"] > 0]
         df_sin_stock = df[df["Rollos"] == 0]
         
         # Mostrar resumen rápido
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("📊 Total Telas", len(df["Tipo de tela"].unique()))
+            st.metric("📊 Telas con Stock", len(df_con_stock["Tipo de tela"].unique()))
         with col2:
-            st.metric("✅ Con Stock", len(df_con_stock["Tipo de tela"].unique()))
-        with col3:
-            st.metric("❌ Sin Stock", len(df_sin_stock["Tipo de tela"].unique()))
-        with col4:
             st.metric("🎨 Colores Activos", len(df_con_stock["Color"].unique()))
+        with col3:
+            st.metric("📦 Total Rollos", df_con_stock["Rollos"].sum())
         
         # Filtros SOLO con telas que tienen stock
         st.subheader("🔍 Filtros")
@@ -599,262 +565,101 @@ elif menu == "📦 Stock":
             )
 
         # Aplicar filtros
-        df_filtrado = df_con_stock.copy()  # Ya partimos de stock > 0
+        df_filtrado = df_con_stock.copy()
         
         if filtro_tela:
             df_filtrado = df_filtrado[df_filtrado["Tipo de tela"].isin(filtro_tela)]
         if filtro_color:
             df_filtrado = df_filtrado[df_filtrado["Color"].isin(filtro_color)]
         
-        # Mostrar tabla con mejor formato
+        # Mostrar tabla principal
         if not df_filtrado.empty:
             st.subheader("📋 Stock Disponible")
             
-            # Crear una copia para mostrar con mejor formato
-            df_mostrar = df_filtrado.copy()
-            
-            # Agregar indicadores visuales
+            # Agregar indicadores visuales simples
             def estilo_fila(row):
                 rollos = row["Rollos"]
                 if rollos >= 10:
-                    return "✅ Stock suficiente"
+                    return "✅ Buen stock"
                 elif rollos >= 5:
                     return "⚠️ Stock medio"
                 else:
                     return "🔴 Stock bajo"
             
+            df_mostrar = df_filtrado.copy()
             df_mostrar["Estado"] = df_mostrar.apply(estilo_fila, axis=1)
+            df_mostrar = df_mostrar[["Tipo de tela", "Color", "Rollos", "Estado"]]
             
-            # Reordenar columnas
-            column_order = ["Tipo de tela", "Color", "Rollos", "Estado"]
-            df_mostrar = df_mostrar[column_order]
+            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
             
-            # Mostrar tabla
-            st.dataframe(
-                df_mostrar, 
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # MEJORADO: Resumen por Tipo de Tela con Gráfico de Barras
+            # RESUMEN POR TELA (VERSIÓN SIMPLE)
             st.markdown("---")
             st.subheader("📊 Resumen por Tipo de Tela")
             
-            # Agrupar por tipo de tela para el gráfico
+            # Agrupar por tipo de tela
             resumen_telas = df_filtrado.groupby("Tipo de tela").agg({
                 "Rollos": "sum",
                 "Color": "nunique"
-            }).round(0).reset_index()
+            }).round(0)
             
-            resumen_telas.columns = ["Tipo de Tela", "Total Rollos", "Cantidad Colores"]
+            resumen_telas.columns = ["Total Rollos", "Colores"]
             resumen_telas = resumen_telas.sort_values("Total Rollos", ascending=False)
             
-            # Crear dos columnas: gráfico a la izquierda, datos a la derecha
-            col_grafico, col_datos = st.columns([2, 1])
-            
-            with col_grafico:
-                # Crear gráfico de barras
-                fig = px.bar(
-                    resumen_telas,
-                    x="Tipo de Tela",
-                    y="Total Rollos",
-                    title="Stock por Tipo de Tela",
-                    labels={"Total Rollos": "Cantidad de Rollos", "Tipo de Tela": ""},
-                    color="Total Rollos",
-                    color_continuous_scale=["#FF9800", "#4CAF50", "#2196F3"],
-                    text="Total Rollos"
-                )
-                
-                # Mejorar el diseño del gráfico
-                fig.update_traces(
-                    texttemplate='%{text} rollos',
-                    textposition='outside',
-                    marker_line_color='rgb(8,48,107)',
-                    marker_line_width=1.5
-                )
-                
-                fig.update_layout(
-                    plot_bgcolor='white',
-                    showlegend=False,
-                    xaxis_tickangle=-45,
-                    height=400,
-                    yaxis_title="Cantidad de Rollos",
-                    font=dict(size=12)
-                )
-                
-                # Configurar ejes
-                fig.update_xaxis(showgrid=False)
-                fig.update_yaxis(showgrid=True, gridwidth=1, gridcolor='LightGrey')
-                
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col_datos:
-                st.subheader("📈 Detalles por Tela")
-                
-                # Mostrar cards con información detallada
-                for _, tela_data in resumen_telas.iterrows():
-                    tela = tela_data["Tipo de Tela"]
-                    total_rollos = int(tela_data["Total Rollos"])
-                    num_colores = int(tela_data["Cantidad Colores"])
+            # Mostrar en columnas simples
+            cols = st.columns(2)
+            for idx, (tela, datos) in enumerate(resumen_telas.iterrows()):
+                with cols[idx % 2]:
+                    total_rollos = int(datos["Total Rollos"])
+                    num_colores = int(datos["Colores"])
                     
-                    # Obtener colores específicos para esta tela
-                    colores_tela = df_filtrado[df_filtrado["Tipo de tela"] == tela]["Color"].unique()
-                    
-                    # Determinar color de borde según stock
-                    border_color = "#4CAF50"  # Verde por defecto
-                    if total_rollos < 5:
-                        border_color = "#FF9800"  # Naranja
-                    elif total_rollos < 2:
-                        border_color = "#F44336"  # Rojo
+                    # Color según stock
+                    if total_rollos >= 10:
+                        color_emoji = "✅"
+                        color_bg = "#E8F5E8"
+                    elif total_rollos >= 5:
+                        color_emoji = "⚠️"
+                        color_bg = "#FFF3E0"
+                    else:
+                        color_emoji = "🔴"
+                        color_bg = "#FFEBEE"
                     
                     st.markdown(f"""
                     <div style='
-                        background: white; 
-                        padding: 12px; 
-                        border-radius: 8px; 
-                        border-left: 4px solid {border_color};
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        background: {color_bg}; 
+                        padding: 15px; 
+                        border-radius: 10px; 
+                        border-left: 4px solid #4CAF50;
                         margin-bottom: 10px;
                     '>
-                        <div style='font-weight: bold; font-size: 14px;'>🎨 {tela}</div>
-                        <div style='font-size: 20px; font-weight: bold; color: #2c3e50;'>{total_rollos} rollos</div>
-                        <div style='font-size: 12px; color: #666;'>
-                            🎨 {num_colores} color{'' if num_colores == 1 else 'es'}
-                        </div>
+                        <h4>{color_emoji} {tela}</h4>
+                        <p style='font-size: 24px; font-weight: bold; margin: 5px 0;'>{total_rollos} rollos</p>
+                        <p style='color: #666; margin: 0;'>🎨 {num_colores} color{'es' if num_colores != 1 else ''}</p>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    # Mostrar colores disponibles (solo si hay pocos)
-                    if len(colores_tela) <= 6:
-                        colores_texto = " • ".join(sorted(colores_tela))
-                        st.caption(f"🎨 {colores_texto}")
             
-            # Gráfico adicional: Distribución de colores por tela
+            # Totales generales
             st.markdown("---")
-            st.subheader("🎨 Distribución de Colores por Tela")
+            st.subheader("📈 Totales Generales")
             
-            col_graf1, col_graf2 = st.columns(2)
+            total_rollos_filtrado = df_filtrado["Rollos"].sum()
+            total_telas_filtrado = len(df_filtrado["Tipo de tela"].unique())
+            total_colores_filtrado = len(df_filtrado["Color"].unique())
             
-            with col_graf1:
-                # Gráfico de torta para distribución de stock
-                fig_torta = px.pie(
-                    resumen_telas,
-                    values="Total Rollos",
-                    names="Tipo de Tela",
-                    title="Distribución % del Stock Total",
-                    hole=0.4
-                )
-                fig_torta.update_traces(textposition='inside', textinfo='percent+label')
-                fig_torta.update_layout(height=300)
-                st.plotly_chart(fig_torta, use_container_width=True)
-            
-            with col_graf2:
-                # Gráfico de colores por tela
-                fig_colores = px.bar(
-                    resumen_telas,
-                    x="Tipo de Tela",
-                    y="Cantidad Colores",
-                    title="Cantidad de Colores por Tela",
-                    labels={"Cantidad Colores": "N° de Colores", "Tipo de Tela": ""},
-                    color="Cantidad Colores",
-                    color_continuous_scale="Viridis",
-                    text="Cantidad Colores"
-                )
-                fig_colores.update_traces(
-                    texttemplate='%{text} colores',
-                    textposition='outside'
-                )
-                fig_colores.update_layout(
-                    plot_bgcolor='white',
-                    showlegend=False,
-                    height=300,
-                    xaxis_tickangle=-45
-                )
-                st.plotly_chart(fig_colores, use_container_width=True)
-            
-            # Cálculos de valorización (mantener esta sección igual)
-            st.markdown("---")
-            st.subheader("💰 Valorización del Stock")
-            
-            # Obtener datos de compras para precios
-            df_compras = get_compras_resumen()
-            
-            if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
-                # Función para convertir formato argentino
-                def convertir_formato_argentino(valor):
-                    if pd.isna(valor):
-                        return 0.0
-                    if isinstance(valor, (int, float)):
-                        return float(valor)
-                    valor_str = str(valor).replace("USD", "").replace(" ", "").strip()
-                    try:
-                        if "." in valor_str and "," in valor_str:
-                            return float(valor_str.replace(".", "").replace(",", "."))
-                        elif "," in valor_str:
-                            return float(valor_str.replace(",", "."))
-                        else:
-                            return float(valor_str)
-                    except:
-                        return 0.0
-                
-                # Función para formatear en estilo argentino
-                def formato_argentino_moneda(valor):
-                    if pd.isna(valor) or valor == 0:
-                        return "USD 0,00"
-                    formatted = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    return f"USD {formatted}"
-                
-                # Convertir precios
-                df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
-                
-                # Calcular valorización
-                total_rollos_filtrado = df_filtrado["Rollos"].sum()
-                precios_telas = {}
-                
-                # Si hay filtro de telas, calcular por cada una
-                if filtro_tela:
-                    for tela in filtro_tela:
-                        precio_promedio_tela = df_compras[
-                            df_compras["Tipo de tela"] == tela
-                        ]["Precio promedio x rollo num"].mean()
-                        
-                        if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
-                            precios_telas[tela] = precio_promedio_tela
-                
-                # Mostrar métricas de valorización
-                col_v1, col_v2, col_v3 = st.columns(3)
-                
-                with col_v1:
-                    st.metric("📦 Total Rollos", total_rollos_filtrado)
-                
-                with col_v2:
-                    if precios_telas:
-                        if len(precios_telas) == 1:
-                            precio_promedio = list(precios_telas.values())[0]
-                        else:
-                            precio_promedio = sum(precios_telas.values()) / len(precios_telas)
-                        
-                        st.metric("💰 Precio Promedio", formato_argentino_moneda(precio_promedio))
-                    else:
-                        st.metric("💰 Precio Promedio", "USD -")
-                
-                with col_v3:
-                    if precios_telas:
-                        total_valorizado = total_rollos_filtrado * precio_promedio
-                        st.metric("💲 Valor Total", formato_argentino_moneda(total_valorizado))
-                    else:
-                        st.metric("💲 Valor Total", "USD -")
-            
-            else:
-                st.info("ℹ️ No hay información de precios disponible para valorización")
+            col_t1, col_t2, col_t3 = st.columns(3)
+            with col_t1:
+                st.metric("📦 Total Rollos", total_rollos_filtrado)
+            with col_t2:
+                st.metric("🎨 Tipos de Tela", total_telas_filtrado)
+            with col_t3:
+                st.metric("🌈 Colores", total_colores_filtrado)
                 
         else:
             st.info("ℹ️ No hay stock disponible con los filtros aplicados")
         
-        # Sección informativa sobre stock cero (opcional)
+        # Sección informativa sobre stock cero
         with st.expander("📋 Ver telas sin stock"):
             if not df_sin_stock.empty:
-                st.write("Estas telas aparecerán cuando tengan stock disponible:")
+                st.write("Estas telas actualmente no tienen stock:")
                 st.dataframe(df_sin_stock[["Tipo de tela", "Color", "Rollos"]], use_container_width=True)
             else:
                 st.success("🎉 ¡Todas las telas tienen stock disponible!")
@@ -1983,6 +1788,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
