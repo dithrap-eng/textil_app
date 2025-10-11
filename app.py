@@ -43,6 +43,7 @@ spreadsheet = client.open(SHEET_NAME)
 def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas):
     ws_compras = spreadsheet.worksheet("Compras")
     ws_detalle = spreadsheet.worksheet("Detalle_Compras")
+    ws_stock = spreadsheet.worksheet("Stock")  # NUEVO
 
     total_rollos = sum(int(l["rollos"]) for l in lineas)
     total_valor = float(total_metros) * float(precio_por_metro)
@@ -56,13 +57,33 @@ def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros,
 
     for l in lineas:
         if l["rollos"] > 0:
+            # 1. Guardar en histórico de compras (INMUTABLE)
             ws_detalle.append_row([
                 compra_id, tipo_tela, l["color"], l["rollos"]
             ])
+            
+            # 2. NUEVO: Actualizar stock
+            stock_data = ws_stock.get_all_records()
+            df_stock = pd.DataFrame(stock_data)
+            
+            # Buscar si ya existe este tipo tela + color en stock
+            mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
+            idx = df_stock[mask].index
+            
+            if not idx.empty:
+                # Actualizar existencia existente
+                row = idx[0] + 2  # +2 porque get_all_records empieza en fila 2
+                current_stock = int(df_stock.loc[idx[0], "Rollos"])
+                new_stock = current_stock + l["rollos"]
+                ws_stock.update_cell(row, df_stock.columns.get_loc("Rollos") + 1, new_stock)
+            else:
+                # Crear nuevo registro en stock
+                ws_stock.append_row([tipo_tela, l["color"], l["rollos"]])
 
 def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda):
     ws_cortes = spreadsheet.worksheet("Cortes")
     ws_detalle = spreadsheet.worksheet("Detalle_Cortes")
+    ws_stock = spreadsheet.worksheet("Stock")  # NUEVO
 
     corte_id = len(ws_cortes.col_values(1))
     ws_cortes.append_row([
@@ -71,26 +92,34 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
     ])
 
     for l in lineas:
-        # AGREGAR TIPO DE TELA AL DETALLE
         ws_detalle.append_row([
             corte_id, 
             l["color"], 
             l["rollos"],
-            l["tipo_tela"]  # NUEVO CAMPO
+            l["tipo_tela"]
         ])
 
-    ws_detalle_compras = spreadsheet.worksheet("Detalle_Compras")
-    data = ws_detalle_compras.get_all_records()
-    df = pd.DataFrame(data)
-
+    # NUEVO: Actualizar Stock en lugar de modificar Detalle_Compras
+    stock_data = ws_stock.get_all_records()
+    df_stock = pd.DataFrame(stock_data)
+    
     for l in lineas:
-        idx = df[(df["Tipo de tela"] == tipo_tela) & (df["Color"] == l["color"])].index
+        # Buscar en stock
+        mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
+        idx = df_stock[mask].index
+        
         if not idx.empty:
-            row = idx[0] + 2
-            new_value = int(df.loc[idx[0], "Rollos"]) - l["rollos"]
-            if new_value < 0:
-                new_value = 0
-            ws_detalle_compras.update_cell(row, 4, new_value)
+            row = idx[0] + 2  # +2 porque get_all_records empieza en fila 2
+            current_stock = int(df_stock.loc[idx[0], "Rollos"])
+            new_stock = current_stock - l["rollos"]
+            if new_stock < 0:
+                new_stock = 0
+                st.warning(f"⚠️ Stock negativo prevenido para {l['color']}. Ajustado a 0.")
+            
+            # Actualizar stock
+            ws_stock.update_cell(row, df_stock.columns.get_loc("Rollos") + 1, new_stock)
+        else:
+            st.error(f"❌ No se encontró en stock: {tipo_tela} - {l['color']}")
             
 # =====================
 # CONSULTAS
@@ -2057,6 +2086,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
