@@ -125,15 +125,29 @@ def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, p
 # CONSULTAS
 # =====================
 def get_stock_resumen():
-    ws_detalle = spreadsheet.worksheet("Detalle_Compras")
-    data = ws_detalle.get_all_records()
-    df = pd.DataFrame(data)
+    """
+    Obtiene el resumen de stock desde la solapa Stock (no desde Detalle_Compras)
+    """
+    try:
+        ws_stock = spreadsheet.worksheet("Stock")  # CAMBIADO: Usar Stock
+        data = ws_stock.get_all_records()
+        df = pd.DataFrame(data)
 
-    if df.empty:
-        return df
+        if df.empty:
+            return df
 
-    df_stock = df.groupby(["Tipo de tela", "Color"])["Rollos"].sum().reset_index()
-    return df_stock
+        # Si la solapa Stock ya tiene la estructura correcta, simplemente retornar los datos
+        # Si necesitas agrupar (por si hay duplicados), mantener el groupby
+        if "Tipo de tela" in df.columns and "Color" in df.columns and "Rollos" in df.columns:
+            df_stock = df.groupby(["Tipo de tela", "Color"])["Rollos"].sum().reset_index()
+            return df_stock
+        else:
+            st.error("❌ La solapa Stock no tiene la estructura esperada")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        st.error(f"❌ Error al cargar stock: {str(e)}")
+        return pd.DataFrame()
 
 def get_compras_resumen():
     try:
@@ -216,18 +230,18 @@ if menu == "📥 Compras":
     proveedores = get_proveedores()
     proveedor = st.selectbox("Proveedor", proveedores if proveedores else ["---"])
     
-    # --- NUEVA SECCIÓN: TIPO DE TELA CON UNIFICACIÓN ---
+    # --- SECCIÓN MODIFICADA: TIPO DE TELA CON DATOS DE STOCK ---
     st.subheader("Tipo de Tela")
     
     @st.cache_data
     def get_telas_existentes():
         """
-        Obtiene los tipos de tela existentes de las compras anteriores
+        Obtiene los tipos de tela existentes del STOCK (no de compras anteriores)
         """
         try:
-            df_compras = get_compras_resumen()
-            if not df_compras.empty and "Tipo de tela" in df_compras.columns:
-                return sorted(df_compras["Tipo de tela"].dropna().unique().tolist())
+            df_stock = get_stock_resumen()  # Esto ahora viene del Stock
+            if not df_stock.empty and "Tipo de tela" in df_stock.columns:
+                return sorted(df_stock["Tipo de tela"].dropna().unique().tolist())
             return []
         except:
             return []
@@ -241,7 +255,7 @@ if menu == "📥 Compras":
         "Tipo de tela", 
         options=opciones_telas,
         index=0,
-        help="Selecciona un tipo de tela existente o 'Agregar nuevo' para crear uno"
+        help="Selecciona un tipo de tela existente en el stock o 'Agregar nuevo' para crear uno"
     )
     
     if seleccion_tela == "➕ Agregar nuevo tipo de tela":
@@ -306,7 +320,7 @@ if menu == "📥 Compras":
                 options=opciones_colores,
                 index=0,
                 key=f"color_select_{i}",
-                help="Selecciona un color existente o 'Agregar nuevo color' para crear uno"
+                help="Selecciona un color existente en el stock o 'Agregar nuevo color' para crear uno"
             )
             
             if seleccion_color == "➕ Agregar nuevo color":
@@ -2086,6 +2100,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
