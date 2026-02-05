@@ -1368,7 +1368,7 @@ elif menu == "🏭 Talleres":
     
     st.header("📋 Tablero de Producción - Talleres")
 
-    @st.cache_data(ttl=600)
+    @st.cache_data(ttl=3600)
     def cargar_datos(solapa):
         """
         Carga datos de una solapa específica de Google Sheets
@@ -2100,6 +2100,7 @@ elif menu == "🏭 Talleres":
         
         except Exception as e:
             st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
+
 
 
 
