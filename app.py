@@ -4,207 +4,386 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
 import numpy as np 
+import time
+from collections import defaultdict
 
 # =====================
-# CONFIGURACIÓN GOOGLE SHEETS (con secrets)
+# CONFIGURACIÓN OPTIMIZADA GOOGLE SHEETS
 # =====================
 SHEET_NAME = "textil_sistema"
 
-@st.cache_resource
+@st.cache_resource(ttl=1800)  # 30 minutos para la conexión
 def init_connection():
-    scope = ["https://spreadsheets.google.com/feeds",
-             "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"], scopes=scope
-    )
-    client = gspread.authorize(creds)
-    return client
+    """Conexión más robusta a Google Sheets"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            scope = [
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            creds = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"], 
+                scopes=scope
+            )
+            client = gspread.authorize(creds)
+            
+            # Test de conexión
+            sheet = client.open(SHEET_NAME)
+            print(f"✅ Conexión exitosa a Google Sheets (intento {attempt + 1})")
+            return client
+            
+        except Exception as e:
+            if attempt == max_retries - 1:
+                st.error(f"❌ Error de conexión después de {max_retries} intentos: {str(e)}")
+                return None
+            time.sleep(2)  # Esperar antes de reintentar
 
 client = init_connection()
 
-@st.cache_data(ttl=600)
-def cargar_datos(solapa):
-    """
-    Carga datos de una solapa específica de Google Sheets
-    """
+@st.cache_data(ttl=300)  # 5 minutos de caché para datos
+def cargar_hoja(hoja_nombre):
+    """Carga una hoja completa con manejo de errores"""
     try:
-        sheet = client.open(SHEET_NAME).worksheet(solapa)
-        data = sheet.get_all_records()
-        return pd.DataFrame(data)
-    except Exception as e:
-        st.error(f"Error al cargar datos de {solapa}: {str(e)}")
-        return pd.DataFrame()
+        if not client:
+            return pd.DataFrame()
         
-spreadsheet = client.open(SHEET_NAME)
+        sheet = client.open(SHEET_NAME).worksheet(hoja_nombre)
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        
+        # Limpiar filas completamente vacías
+        df = df.dropna(how='all')
+        
+        return df
+        
+    except Exception as e:
+        print(f"⚠️ Error al cargar {hoja_nombre}: {str(e)}")
+        return pd.DataFrame()
+
+def guardar_hoja(df, hoja_nombre):
+    """Guarda DataFrame en Google Sheet"""
+    try:
+        if not client:
+            return False
+        
+        sheet = client.open(SHEET_NAME).worksheet(hoja_nombre)
+        
+        # Limpiar hoja existente
+        sheet.clear()
+        
+        # Agregar encabezados primero
+        if not df.empty:
+            headers = df.columns.tolist()
+            sheet.append_row(headers)
+            
+            # Agregar datos fila por fila
+            for _, row in df.iterrows():
+                sheet.append_row(row.tolist())
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Error al guardar {hoja_nombre}: {str(e)}")
+        return False
 
 # =====================
-# FUNCIONES DE GUARDADO
+# FUNCIONES DE GUARDADO OPTIMIZADAS
 # =====================
 def insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas):
-    ws_compras = spreadsheet.worksheet("Compras")
-    ws_detalle = spreadsheet.worksheet("Detalle_Compras")
-    ws_stock = spreadsheet.worksheet("Stock")  # NUEVO
-
-    total_rollos = sum(int(l["rollos"]) for l in lineas)
-    total_valor = float(total_metros) * float(precio_por_metro)
-    precio_promedio_rollo = total_valor / total_rollos if total_rollos > 0 else 0
-
-    compra_id = len(ws_compras.col_values(1))
-    ws_compras.append_row([
-        compra_id, str(fecha), proveedor, tipo_tela,
-        total_metros, precio_por_metro, total_rollos, total_valor, precio_promedio_rollo
-    ])
-
-    for l in lineas:
-        if l["rollos"] > 0:
-            # 1. Guardar en histórico de compras (INMUTABLE)
-            ws_detalle.append_row([
-                compra_id, tipo_tela, l["color"], l["rollos"]
+    """Versión optimizada de inserción de compra"""
+    try:
+        # Cargar datos actuales (lotes completos)
+        df_compras = cargar_hoja("Compras")
+        df_detalle = cargar_hoja("Detalle_Compras")
+        df_stock = cargar_hoja("Stock")
+        
+        # Inicializar DataFrames si están vacíos
+        if df_compras.empty:
+            df_compras = pd.DataFrame(columns=[
+                "ID", "Fecha", "Proveedor", "Tipo de tela", "Total metros", 
+                "Precio por metro", "Total rollos", "Valor total", "Precio promedio rollo"
             ])
-            
-            # 2. NUEVO: Actualizar stock
-            stock_data = ws_stock.get_all_records()
-            df_stock = pd.DataFrame(stock_data)
-            
-            # Buscar si ya existe este tipo tela + color en stock
-            mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
-            idx = df_stock[mask].index
-            
-            if not idx.empty:
-                # Actualizar existencia existente
-                row = idx[0] + 2  # +2 porque get_all_records empieza en fila 2
-                current_stock = int(df_stock.loc[idx[0], "Rollos"])
-                new_stock = current_stock + l["rollos"]
-                ws_stock.update_cell(row, df_stock.columns.get_loc("Rollos") + 1, new_stock)
-            else:
-                # Crear nuevo registro en stock
-                ws_stock.append_row([tipo_tela, l["color"], l["rollos"]])
+        
+        if df_detalle.empty:
+            df_detalle = pd.DataFrame(columns=["ID Compra", "Tipo de tela", "Color", "Rollos"])
+        
+        if df_stock.empty:
+            df_stock = pd.DataFrame(columns=["Tipo de tela", "Color", "Rollos"])
+        
+        # Generar ID
+        compra_id = len(df_compras) + 1 if not df_compras.empty else 1
+        
+        # Calcular valores
+        total_rollos = sum(l["rollos"] for l in lineas)
+        total_valor = total_metros * precio_por_metro
+        precio_promedio = total_valor / total_rollos if total_rollos > 0 else 0
+        
+        # 1. Agregar a Compras
+        nueva_compra = {
+            "ID": compra_id,
+            "Fecha": str(fecha),
+            "Proveedor": proveedor,
+            "Tipo de tela": tipo_tela,
+            "Total metros": total_metros,
+            "Precio por metro": precio_por_metro,
+            "Total rollos": total_rollos,
+            "Valor total": total_valor,
+            "Precio promedio rollo": precio_promedio
+        }
+        
+        df_compras = pd.concat([df_compras, pd.DataFrame([nueva_compra])], ignore_index=True)
+        
+        # 2. Agregar a Detalle_Compras (histórico)
+        for l in lineas:
+            if l["rollos"] > 0:
+                nuevo_detalle = {
+                    "ID Compra": compra_id,
+                    "Tipo de tela": tipo_tela,
+                    "Color": l["color"],
+                    "Rollos": l["rollos"]
+                }
+                df_detalle = pd.concat([df_detalle, pd.DataFrame([nuevo_detalle])], ignore_index=True)
+        
+        # 3. Actualizar Stock
+        for l in lineas:
+            if l["rollos"] > 0:
+                mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
+                
+                if mask.any():
+                    # Actualizar existente
+                    idx = df_stock[mask].index[0]
+                    df_stock.at[idx, "Rollos"] += l["rollos"]
+                else:
+                    # Agregar nuevo
+                    nuevo_stock = {
+                        "Tipo de tela": tipo_tela,
+                        "Color": l["color"],
+                        "Rollos": l["rollos"]
+                    }
+                    df_stock = pd.concat([df_stock, pd.DataFrame([nuevo_stock])], ignore_index=True)
+        
+        # 4. Guardar todo (una sola operación por hoja)
+        guardar_hoja(df_compras, "Compras")
+        guardar_hoja(df_detalle, "Detalle_Compras")
+        guardar_hoja(df_stock, "Stock")
+        
+        # Limpiar caché
+        st.cache_data.clear()
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Error en compra: {str(e)}")
+        return False
 
 def insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda):
-    ws_cortes = spreadsheet.worksheet("Cortes")
-    ws_detalle = spreadsheet.worksheet("Detalle_Cortes")
-    ws_stock = spreadsheet.worksheet("Stock")  # NUEVO
-
-    corte_id = len(ws_cortes.col_values(1))
-    ws_cortes.append_row([
-        corte_id, str(fecha), nro_corte, articulo, tipo_tela,
-        sum(l["rollos"] for l in lineas), consumo_total, prendas, consumo_x_prenda
-    ])
-
-    for l in lineas:
-        ws_detalle.append_row([
-            corte_id, 
-            l["color"], 
-            l["rollos"],
-            l["tipo_tela"]
-        ])
-
-    # NUEVO: Actualizar Stock en lugar de modificar Detalle_Compras
-    stock_data = ws_stock.get_all_records()
-    df_stock = pd.DataFrame(stock_data)
-    
-    for l in lineas:
-        # Buscar en stock
-        mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
-        idx = df_stock[mask].index
+    """Versión optimizada de inserción de corte"""
+    try:
+        # Cargar datos actuales (lotes completos)
+        df_cortes = cargar_hoja("Cortes")
+        df_detalle = cargar_hoja("Detalle_Cortes")
+        df_stock = cargar_hoja("Stock")
         
-        if not idx.empty:
-            row = idx[0] + 2  # +2 porque get_all_records empieza en fila 2
-            current_stock = int(df_stock.loc[idx[0], "Rollos"])
-            new_stock = current_stock - l["rollos"]
-            if new_stock < 0:
-                new_stock = 0
-                st.warning(f"⚠️ Stock negativo prevenido para {l['color']}. Ajustado a 0.")
+        # Inicializar DataFrames si están vacíos
+        if df_cortes.empty:
+            df_cortes = pd.DataFrame(columns=[
+                "ID", "Fecha", "Número de corte", "Artículo", "Tipo de tela",
+                "Total rollos", "Consumo total", "Prendas", "Consumo por prenda"
+            ])
+        
+        if df_detalle.empty:
+            df_detalle = pd.DataFrame(columns=["ID Corte", "Color", "Rollos", "Tipo de tela"])
+        
+        # Generar ID
+        corte_id = len(df_cortes) + 1 if not df_cortes.empty else 1
+        
+        total_rollos = sum(l["rollos"] for l in lineas)
+        
+        # 1. Agregar a Cortes
+        nuevo_corte = {
+            "ID": corte_id,
+            "Fecha": str(fecha),
+            "Número de corte": nro_corte,
+            "Artículo": articulo,
+            "Tipo de tela": tipo_tela,
+            "Total rollos": total_rollos,
+            "Consumo total": consumo_total,
+            "Prendas": prendas,
+            "Consumo por prenda": consumo_x_prenda
+        }
+        
+        df_cortes = pd.concat([df_cortes, pd.DataFrame([nuevo_corte])], ignore_index=True)
+        
+        # 2. Agregar a Detalle_Cortes
+        for l in lineas:
+            nuevo_detalle = {
+                "ID Corte": corte_id,
+                "Color": l["color"],
+                "Rollos": l["rollos"],
+                "Tipo de tela": tipo_tela
+            }
+            df_detalle = pd.concat([df_detalle, pd.DataFrame([nuevo_detalle])], ignore_index=True)
+        
+        # 3. Actualizar Stock (restar)
+        for l in lineas:
+            mask = (df_stock["Tipo de tela"] == tipo_tela) & (df_stock["Color"] == l["color"])
             
-            # Actualizar stock
-            ws_stock.update_cell(row, df_stock.columns.get_loc("Rollos") + 1, new_stock)
-        else:
-            st.error(f"❌ No se encontró en stock: {tipo_tela} - {l['color']}")
-            
-# =====================
-# CONSULTAS
-# =====================
-def get_stock_resumen():
-    """
-    Obtiene el resumen de stock desde la solapa Stock (no desde Detalle_Compras)
-    """
-    try:
-        ws_stock = spreadsheet.worksheet("Stock")  # CAMBIADO: Usar Stock
-        data = ws_stock.get_all_records()
-        df = pd.DataFrame(data)
-
-        if df.empty:
-            return df
-
-        # Si la solapa Stock ya tiene la estructura correcta, simplemente retornar los datos
-        # Si necesitas agrupar (por si hay duplicados), mantener el groupby
-        if "Tipo de tela" in df.columns and "Color" in df.columns and "Rollos" in df.columns:
-            df_stock = df.groupby(["Tipo de tela", "Color"])["Rollos"].sum().reset_index()
-            return df_stock
-        else:
-            st.error("❌ La solapa Stock no tiene la estructura esperada")
-            return pd.DataFrame()
-            
+            if mask.any():
+                idx = df_stock[mask].index[0]
+                nuevo_stock = df_stock.at[idx, "Rollos"] - l["rollos"]
+                df_stock.at[idx, "Rollos"] = max(0, nuevo_stock)  # No negativo
+            else:
+                st.warning(f"⚠️ No se encontró en stock: {tipo_tela} - {l['color']}")
+        
+        # 4. Guardar todo (una sola operación por hoja)
+        guardar_hoja(df_cortes, "Cortes")
+        guardar_hoja(df_detalle, "Detalle_Cortes")
+        guardar_hoja(df_stock, "Stock")
+        
+        # Limpiar caché
+        st.cache_data.clear()
+        
+        return True
+        
     except Exception as e:
-        st.error(f"❌ Error al cargar stock: {str(e)}")
-        return pd.DataFrame()
+        st.error(f"❌ Error en corte: {str(e)}")
+        return False
 
+# =====================
+# CONSULTAS OPTIMIZADAS
+# =====================
+@st.cache_data(ttl=300)
+def get_stock_resumen():
+    """Obtiene stock actual desde la hoja Stock"""
+    df = cargar_hoja("Stock")
+    if df.empty:
+        return pd.DataFrame(columns=["Tipo de tela", "Color", "Rollos"])
+    
+    # Asegurar columnas correctas
+    required_cols = ["Tipo de tela", "Color", "Rollos"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    
+    if missing_cols:
+        st.error(f"❌ Faltan columnas en Stock: {missing_cols}")
+        return pd.DataFrame(columns=required_cols)
+    
+    # Convertir rollos a numérico y agrupar por si hay duplicados
+    df["Rollos"] = pd.to_numeric(df["Rollos"], errors="coerce").fillna(0)
+    df_stock = df.groupby(["Tipo de tela", "Color"])["Rollos"].sum().reset_index()
+    
+    return df_stock
+
+@st.cache_data(ttl=300)
 def get_compras_resumen():
-    try:
-        ws_compras = spreadsheet.worksheet("Compras")
-        data = ws_compras.get_all_records()
-        df = pd.DataFrame(data)
-        return df
-    except:
+    """Obtiene resumen de compras"""
+    df = cargar_hoja("Compras")
+    if df.empty:
         return pd.DataFrame()
+    return df
 
+@st.cache_data(ttl=300)
 def get_detalle_compras():
-    """
-    Obtiene el detalle de colores por compra
-    """
-    try:
-        ws_detalle = spreadsheet.worksheet("Detalle_Compras")
-        data = ws_detalle.get_all_records()
-        df = pd.DataFrame(data)
-        return df
-    except:
+    """Obtiene el detalle de colores por compra"""
+    df = cargar_hoja("Detalle_Compras")
+    if df.empty:
         return pd.DataFrame()
+    return df
 
+@st.cache_data(ttl=3600)  # 1 hora para proveedores (cambia poco)
 def get_proveedores():
-    ws = spreadsheet.worksheet("Proveedores")
-    data = ws.col_values(1)[1:]
-    return data
-
-def update_stock(tipo_tela, color, nuevo_valor):
-    ws = spreadsheet.worksheet("Stock")
-    data = ws.get_all_records()
-    headers = ws.row_values(1)
-
-    col_idx = headers.index("Rollos") + 1
-
-    for idx, row in enumerate(data, start=2):
-        if row["Tipo de tela"] == tipo_tela and row["Color"] == color:
-            ws.update_cell(idx, col_idx, nuevo_valor)
-            break
+    """Obtiene lista de proveedores"""
+    try:
+        df = cargar_hoja("Proveedores")
+        if not df.empty and "Nombre" in df.columns:
+            return df["Nombre"].dropna().unique().tolist()
+        
+        # Si no existe la hoja o columna, crear lista vacía
+        return []
+    except:
+        return []
 
 def insert_proveedor(nombre):
-    ws = spreadsheet.worksheet("Proveedores")
-    ws.append_row([nombre])
-
-def get_cortes_resumen():
+    """Inserta un nuevo proveedor"""
     try:
-        ws_cortes = spreadsheet.worksheet("Cortes")
-        data = ws_cortes.get_all_records()
-        df = pd.DataFrame(data)
+        df = cargar_hoja("Proveedores")
+        
+        if df.empty:
+            df = pd.DataFrame(columns=["Nombre"])
+        
+        # Verificar si ya existe
+        if nombre in df["Nombre"].values:
+            st.warning(f"⚠️ El proveedor '{nombre}' ya existe")
+            return False
+        
+        # Agregar nuevo
+        nuevo_proveedor = {"Nombre": nombre}
+        df = pd.concat([df, pd.DataFrame([nuevo_proveedor])], ignore_index=True)
+        
+        # Guardar
+        if guardar_hoja(df, "Proveedores"):
+            st.cache_data.clear()  # Limpiar caché de proveedores
+            return True
+        return False
+        
+    except Exception as e:
+        st.error(f"❌ Error al agregar proveedor: {str(e)}")
+        return False
+
+@st.cache_data(ttl=300)
+def get_cortes_resumen():
+    """Obtiene resumen de cortes"""
+    df = cargar_hoja("Cortes")
+    if df.empty:
+        return pd.DataFrame()
+    return df
+
+@st.cache_data(ttl=300)
+def get_talleres_data():
+    """Obtiene datos de talleres"""
+    df = cargar_hoja("Talleres")
+    if df.empty:
+        return pd.DataFrame()
+    return df
+
+@st.cache_data(ttl=300)
+def get_nombre_talleres():
+    """Obtiene lista de nombres de talleres"""
+    try:
+        df = cargar_hoja("Nombre_talleres")
+        if not df.empty:
+            if "Taller" in df.columns:
+                talleres = df["Taller"].dropna().unique().tolist()
+            else:
+                # Intentar primera columna
+                talleres = df.iloc[:, 0].dropna().unique().tolist()
+            
+            # Filtrar y ordenar
+            talleres = [t for t in talleres if str(t).strip()]
+            return sorted(list(set(talleres)))
+        
+        return []
+    except:
+        return []
+
+@st.cache_data(ttl=300)
+def get_historial_entregas():
+    """Obtiene historial de entregas"""
+    try:
+        df = cargar_hoja("Historial_Entregas")
+        if df.empty:
+            return pd.DataFrame()
         return df
     except:
         return pd.DataFrame()
 
-def get_talleres():
+@st.cache_data(ttl=300)
+def get_devoluciones():
+    """Obtiene datos de devoluciones"""
     try:
-        ws_talleres = spreadsheet.worksheet("Talleres")
-        data = ws_talleres.get_all_records()
-        df = pd.DataFrame(data)
+        df = cargar_hoja("Devoluciones")
+        if df.empty:
+            return pd.DataFrame()
         return df
     except:
         return pd.DataFrame()
@@ -230,16 +409,14 @@ if menu == "📥 Compras":
     proveedores = get_proveedores()
     proveedor = st.selectbox("Proveedor", proveedores if proveedores else ["---"])
     
-    # --- SECCIÓN MODIFICADA: TIPO DE TELA CON DATOS DE STOCK ---
+    # --- TIPO DE TELA ---
     st.subheader("Tipo de Tela")
     
-    @st.cache_data
+    @st.cache_data(ttl=300)
     def get_telas_existentes():
-        """
-        Obtiene los tipos de tela existentes del STOCK (no de compras anteriores)
-        """
+        """Obtiene los tipos de tela existentes del STOCK"""
         try:
-            df_stock = get_stock_resumen()  # Esto ahora viene del Stock
+            df_stock = get_stock_resumen()
             if not df_stock.empty and "Tipo de tela" in df_stock.columns:
                 return sorted(df_stock["Tipo de tela"].dropna().unique().tolist())
             return []
@@ -295,7 +472,7 @@ if menu == "📥 Compras":
 
     st.subheader("Colores y rollos")
     
-    @st.cache_data
+    @st.cache_data(ttl=300)
     def get_colores_existentes():
         try:
             df_stock = get_stock_resumen()
@@ -356,7 +533,6 @@ if menu == "📥 Compras":
         st.markdown("---")
         st.subheader("🎨 Resumen de colores a registrar")
         
-        from collections import defaultdict
         resumen_colores = defaultdict(int)
         for linea in lineas:
             resumen_colores[linea["color"]] += linea["rollos"]
@@ -409,9 +585,11 @@ if menu == "📥 Compras":
             if colores_duplicados:
                 st.error(f"❌ Colores duplicados: {', '.join(set(colores_duplicados))}")
             else:
-                insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas)
-                st.success("✅ Compra registrada exitosamente!")
-                st.balloons()
+                if insert_purchase(fecha, proveedor, tipo_tela, precio_por_metro, total_metros, lineas):
+                    st.success("✅ Compra registrada exitosamente!")
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
 
 # -------------------------------
 # RESUMEN DE COMPRAS - VERSIÓN SIMPLE CON TABLA
@@ -426,9 +604,10 @@ elif menu == "📊 Resumen Compras":
     if not df_compras.empty:
         # Limpiar y formatear datos
         df_compras["Total metros"] = pd.to_numeric(df_compras["Total metros"], errors="coerce")
-        df_compras["Precio por metro (USD)"] = pd.to_numeric(df_compras["Precio por metro (USD)"], errors="coerce")
-        df_compras["Rollos totales"] = pd.to_numeric(df_compras["Rollos totales"], errors="coerce")
-        df_compras["Total USD"] = pd.to_numeric(df_compras["Total USD"], errors="coerce")
+        df_compras["Precio por metro"] = pd.to_numeric(df_compras["Precio por metro"], errors="coerce")
+        df_compras["Total rollos"] = pd.to_numeric(df_compras["Total rollos"], errors="coerce")
+        df_compras["Valor total"] = pd.to_numeric(df_compras["Valor total"], errors="coerce")
+        df_compras["Precio promedio rollo"] = pd.to_numeric(df_compras["Precio promedio rollo"], errors="coerce")
         
         # Formatear fecha
         if "Fecha" in df_compras.columns:
@@ -448,25 +627,25 @@ elif menu == "📊 Resumen Compras":
         # Seleccionar y ordenar columnas para mostrar - AGREGAR ID PRIMERO
         columnas_mostrar = []
         mapeo_columnas = {
-            "ID": "ID Compra",  # AGREGADO: Mostrar ID de compra
+            "ID": "ID Compra",
             "Fecha": "Fecha",
             "Proveedor": "Proveedor", 
             "Tipo de tela": "Tipo de Tela",
             "Total metros": "Total Metros",
-            "Rollos totales": "Total Rollos",
-            "Precio por metro (USD)": "Precio x Metro",
-            "Total USD": "Total USD",
-            "Precio promedio x rollo": "Precio Promedio x Rollo"
+            "Total rollos": "Total Rollos",
+            "Precio por metro": "Precio x Metro",
+            "Valor total": "Total USD",
+            "Precio promedio rollo": "Precio Promedio x Rollo"
         }
         
         for col_original, col_nuevo in mapeo_columnas.items():
             if col_original in df_mostrar.columns:
                 columnas_mostrar.append(col_nuevo)
-                if col_original in ["Precio por metro (USD)", "Total USD", "Precio promedio x rollo"]:
+                if col_original in ["Precio por metro", "Valor total", "Precio promedio rollo"]:
                     df_mostrar[col_nuevo] = df_mostrar[col_original].apply(lambda x: formato_argentino(x, True))
                 elif col_original == "Total metros":
                     df_mostrar[col_nuevo] = df_mostrar[col_original].apply(formato_argentino)
-                elif col_original == "Rollos totales":
+                elif col_original == "Total rollos":
                     df_mostrar[col_nuevo] = df_mostrar[col_original].astype(int)
                 else:
                     df_mostrar[col_nuevo] = df_mostrar[col_original]
@@ -545,9 +724,9 @@ elif menu == "📊 Resumen Compras":
         st.subheader("📈 Estadísticas Generales")
         
         total_compras = len(df_compras)
-        total_inversion = df_compras["Total USD"].sum()
+        total_inversion = df_compras["Valor total"].sum()
         total_metros = df_compras["Total metros"].sum()
-        total_rollos = df_compras["Rollos totales"].sum()
+        total_rollos = df_compras["Total rollos"].sum()
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -562,7 +741,6 @@ elif menu == "📊 Resumen Compras":
             
     else:
         st.info("No hay compras registradas aún.")
-
 
 # -------------------------------
 # STOCK (CON GRÁFICO DE COMPARACIÓN VISUAL Y VALORIZACIÓN)
@@ -689,7 +867,7 @@ elif menu == "📦 Stock":
                 </div>
                 """, unsafe_allow_html=True)
             
-            # SECCIÓN DE VALORIZACIÓN (RECUPERADA DEL CÓDIGO ORIGINAL)
+            # SECCIÓN DE VALORIZACIÓN
             st.markdown("---")
             st.subheader("💰 Valorización del Stock")
             
@@ -698,7 +876,7 @@ elif menu == "📦 Stock":
             total_rollos_filtrado = df_filtrado["Rollos"].sum()
             
             # 1. Mostrar precio promedio por tipo de tela seleccionado
-            if not df_compras.empty and "Precio promedio x rollo" in df_compras.columns:
+            if not df_compras.empty and "Precio promedio rollo" in df_compras.columns:
                 # Función para convertir correctamente el formato argentino
                 def convertir_formato_argentino(valor):
                     if pd.isna(valor):
@@ -726,7 +904,7 @@ elif menu == "📦 Stock":
                     return f"USD {formatted}"
                 
                 # Convertir la columna de precios
-                df_compras["Precio promedio x rollo num"] = df_compras["Precio promedio x rollo"].apply(convertir_formato_argentino)
+                df_compras["Precio promedio rollo num"] = df_compras["Precio promedio rollo"].apply(convertir_formato_argentino)
                 
                 # Calcular precio promedio por tipo de tela si hay filtro
                 precios_telas = {}
@@ -734,10 +912,9 @@ elif menu == "📦 Stock":
                     for tela in filtro_tela:
                         precio_promedio_tela = df_compras[
                             df_compras["Tipo de tela"] == tela
-                        ]["Precio promedio x rollo num"].mean()
+                        ]["Precio promedio rollo num"].mean()
                         
                         if not pd.isna(precio_promedio_tela) and precio_promedio_tela > 0:
-                            # CORRECCIÓN: No dividir por 100 aquí
                             precio_corregido = precio_promedio_tela
                             precios_telas[tela] = precio_corregido
                 
@@ -754,7 +931,7 @@ elif menu == "📦 Stock":
                     else:
                         precio_promedio_global = sum(precios_telas.values()) / len(precios_telas)
                     
-                    # CORRECCIÓN: Calcular directamente sin dividir por 100
+                    # Calcular valorización
                     total_valorizado = total_rollos_filtrado * precio_promedio_global
                     
                     # Mostrar métricas de valorización
@@ -801,7 +978,7 @@ elif menu == "📦 Stock":
                 st.dataframe(df_sin_stock[["Tipo de tela", "Color", "Rollos"]], use_container_width=True)
             else:
                 st.success("🎉 ¡Todas las telas tienen stock disponible!")
-                    
+
 # -------------------------------
 # CORTES (CON DESGLOSE POR ROLLOS Y TOTALES AUTOMÁTICOS)
 # -------------------------------
@@ -1156,9 +1333,11 @@ elif menu == "✂ Cortes":
                     for linea in lineas:
                         linea["tipo_tela"] = tipo_tela
                     
-                    insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda)
-                    st.success("✅ Corte registrado y stock actualizado correctamente")
-                    st.balloons()
+                    if insert_corte(fecha, nro_corte, articulo, tipo_tela, lineas, consumo_total, prendas, consumo_x_prenda):
+                        st.success("✅ Corte registrado y stock actualizado correctamente")
+                        st.balloons()
+                        time.sleep(2)
+                        st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error al guardar el corte: {str(e)}")
 
@@ -1167,24 +1346,15 @@ elif menu == "✂ Cortes":
     # -------------------------------
     st.subheader("📊 Resumen de cortes registrados")
     
-    def get_cortes_resumen():
-        try:
-            ws_cortes = spreadsheet.worksheet("Cortes")
-            data = ws_cortes.get_all_records()
-            df = pd.DataFrame(data)
-            return df
-        except:
-            return pd.DataFrame()
-    
     df_cortes = get_cortes_resumen()
     
     if not df_cortes.empty:
         
         # Buscar nombres alternativos de columnas
         column_mapping = {
-            'consumo_total': ['Consumo total (m)', 'Consumo total', 'Consumo', 'Total metros'],
-            'cantidad_prendas': ['Cantidad de prendas', 'Prendas', 'Cantidad prendas', 'Cantidad'],
-            'consumo_x_prenda': ['Consumo x prenda (m)', 'Consumo por prenda', 'Metros por prenda']
+            'consumo_total': ['Consumo total', 'Consumo', 'Total metros'],
+            'cantidad_prendas': ['Prendas', 'Cantidad prendas', 'Cantidad'],
+            'consumo_x_prenda': ['Consumo por prenda', 'Metros por prenda']
         }
         
         # Encontrar los nombres reales de las columnas
@@ -1208,8 +1378,8 @@ elif menu == "✂ Cortes":
         
         # Calcular consumo por prenda si no existe la columna
         if 'consumo_x_prenda' not in real_columns and 'consumo_total' in real_columns and 'cantidad_prendas' in real_columns:
-            df_cortes['Consumo x prenda (m)'] = df_cortes[real_columns['consumo_total']] / df_cortes[real_columns['cantidad_prendas']]
-            real_columns['consumo_x_prenda'] = 'Consumo x prenda (m)'
+            df_cortes['Consumo por prenda'] = df_cortes[real_columns['consumo_total']] / df_cortes[real_columns['cantidad_prendas']]
+            real_columns['consumo_x_prenda'] = 'Consumo por prenda'
         
         # Formatear para mostrar
         df_mostrar_cortes = df_cortes.copy()
@@ -1227,7 +1397,7 @@ elif menu == "✂ Cortes":
         
         # Mostrar columnas relevantes (usar nombres reales)
         columnas_a_mostrar = []
-        for col in ["Fecha", "Nro Corte", "Artículo", "Tipo de tela"]:
+        for col in ["Fecha", "Número de corte", "Artículo", "Tipo de tela"]:
             if col in df_mostrar_cortes.columns:
                 columnas_a_mostrar.append(col)
         
@@ -1248,18 +1418,20 @@ elif menu == "✂ Cortes":
                  
     else:
         st.info("No hay cortes registrados aún.")
-    
+
 # -------------------------------
 # PROVEEDORES
 # -------------------------------
-elif menu == "🏭 Proveedores":
+elif menu == "👥 Proveedores":
     st.header("Administrar proveedores")
 
     nuevo = st.text_input("Nuevo proveedor")
     if st.button("➕ Agregar proveedor"):
         if nuevo:
-            insert_proveedor(nuevo)
-            st.success(f"Proveedor '{nuevo}' agregado")
+            if insert_proveedor(nuevo):
+                st.success(f"Proveedor '{nuevo}' agregado")
+                time.sleep(2)
+                st.rerun()
         else:
             st.warning("Ingrese un nombre válido")
 
@@ -1270,13 +1442,10 @@ elif menu == "🏭 Proveedores":
     else:
         st.info("No hay proveedores registrados aún.")
 
-
 # -------------------------------
-# TALLERES (VERSIÓN COMPLETA UNIFICADA - CON SCROLL Y MEJORAS)
+# TALLERES (VERSIÓN COMPLETA UNIFICADA)
 # -------------------------------
 elif menu == "🏭 Talleres":
-    import time
-    
     # Configuración de estilo KANBAN CON SCROLL
     st.markdown("""
         <style>
@@ -1368,63 +1537,16 @@ elif menu == "🏭 Talleres":
     
     st.header("📋 Tablero de Producción - Talleres")
 
-    @st.cache_data(ttl=3600)
-    def cargar_datos(solapa):
-        """
-        Carga datos de una solapa específica de Google Sheets
-        """
-        try:
-            sheet = client.open(SHEET_NAME).worksheet(solapa)
-            data = sheet.get_all_records()
-            return pd.DataFrame(data)
-        except Exception as e:
-            st.error(f"Error al cargar datos de {solapa}: {str(e)}")
-            return pd.DataFrame()
-    
-    # Función para obtener talleres desde Google Sheets
-    def get_nombre_talleres():
-        try:
-            ws_talleres = spreadsheet.worksheet("Nombre_talleres")
-            data = ws_talleres.get_all_records()
-            if data and "Taller" in data[0]:
-                talleres = [row["Taller"] for row in data if row["Taller"].strip()]
-                return sorted(list(set(talleres)))  # Eliminar duplicados y ordenar
-            else:
-                # Si no hay datos o la columna no existe, obtener de la columna A
-                talleres = ws_talleres.col_values(1)
-                if talleres and talleres[0].lower() == "taller":
-                    talleres = talleres[1:]  # Eliminar encabezado
-                return sorted(list(set([t for t in talleres if t.strip()])))
-        except Exception as e:
-            st.error(f"Error al cargar talleres: {str(e)}")
-            return []
-    
     # Cargar todos los datos necesarios
     df_cortes = get_cortes_resumen()
-    df_historial = cargar_datos("Historial_Entregas")
-    df_devoluciones = cargar_datos("Devoluciones")
+    df_historial = get_historial_entregas()
+    df_devoluciones = get_devoluciones()
+    df_talleres = get_talleres_data()
     
     # Obtener lista de talleres
     talleres_existentes = get_nombre_talleres()
     
     if not df_cortes.empty:
-        # Crear o obtener worksheet de talleres
-        try:
-            ws_talleres = spreadsheet.worksheet("Talleres")
-        except:
-            spreadsheet.add_worksheet(title="Talleres", rows=100, cols=20)
-            ws_talleres = spreadsheet.worksheet("Talleres")
-            ws_talleres.append_row(["ID Corte", "Nro Corte", "Artículo", "Taller", 
-                                  "Fecha Envío", "Fecha Entrega", "Prendas Recibidas", 
-                                  "Prendas Falladas", "Estado", "Días Transcurridos"])
-        
-        # Leer datos existentes de talleres
-        try:
-            datos_talleres = ws_talleres.get_all_records()
-            df_talleres = pd.DataFrame(datos_talleres)
-        except:
-            df_talleres = pd.DataFrame()
-        
         # ==============================================
         # 📊 SECCIÓN 1: RESUMEN GENERAL Y ASIGNACIÓN
         # ==============================================
@@ -1435,18 +1557,18 @@ elif menu == "🏭 Talleres":
         en_produccion = len(df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]) if not df_talleres.empty else 0
         entregados = len(df_talleres[df_talleres["Estado"].str.contains("ENTREGADO", na=False)]) if not df_talleres.empty else 0
         
-        # CALCULAR ALERTAS MEJORADO: Cortes con faltantes o devoluciones no entregadas
+        # CALCULAR ALERTAS
         alertas = 0
         if not df_talleres.empty:
             # Cortes con faltantes
             cortes_faltantes = df_talleres[df_talleres["Estado"] == "ENTREGADO c/FALTANTES"]
             
-            # Cortes con devoluciones (ARREGLANDO FALLAS)
+            # Cortes con devoluciones
             cortes_devoluciones = df_talleres[df_talleres["Estado"] == "ARREGLANDO FALLAS"]
             
             alertas = len(cortes_faltantes) + len(cortes_devoluciones)
         
-        # HEADER CON MÉTRICAS (TARJETAS DE COLORES)
+        # HEADER CON MÉTRICAS
         st.subheader("📊 Resumen General")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -1458,7 +1580,7 @@ elif menu == "🏭 Talleres":
         with col4:
             st.markdown(f'<div class="metric-card alert"><h4>⚠️ {alertas}</h4><p>Con alertas</p></div>', unsafe_allow_html=True)
         
-        # SECCIÓN: ASIGNAR CORTES (TABLA EDITABLE)
+        # SECCIÓN: ASIGNAR CORTES
         st.subheader("📤 Asignar Cortes a Talleres")
         
         if not cortes_sin_asignar.empty:
@@ -1488,7 +1610,7 @@ elif menu == "🏭 Talleres":
                     cols = st.columns([1, 2, 1, 2, 2, 1, 1])
                     
                     with cols[0]:
-                        st.write(f"{row['Nro Corte']}")
+                        st.write(f"{row['Número de corte']}")
                     with cols[1]:
                         st.write(row['Artículo'])
                     with cols[2]:
@@ -1513,7 +1635,6 @@ elif menu == "🏭 Talleres":
                             key=f"fecha_{i}",
                             label_visibility="collapsed"
                         )
-                        # CORREGIDO: Guardar como string en formato fecha
                         df_editable.at[i, "Fecha Envío"] = fecha.strftime("%Y-%m-%d")
                     with cols[6]:
                         asignar = st.checkbox("✓", key=f"asignar_{i}", value=row['Asignar'])
@@ -1526,42 +1647,52 @@ elif menu == "🏭 Talleres":
                     cortes_a_asignar = df_editable[df_editable["Asignar"] == True]
                     
                     if not cortes_a_asignar.empty:
+                        # Cargar datos actuales de talleres
+                        df_talleres_actual = cargar_hoja("Talleres")
+                        
+                        if df_talleres_actual.empty:
+                            df_talleres_actual = pd.DataFrame(columns=[
+                                "ID Corte", "Número de Corte", "Artículo", "Taller", 
+                                "Fecha Envío", "Fecha Entrega", "Prendas Recibidas", 
+                                "Prendas Falladas", "Estado", "Días Transcurridos"
+                            ])
+                        
                         success_count = 0
                         for _, corte in cortes_a_asignar.iterrows():
                             if corte["Taller"].strip():
-                                # CORREGIDO: Convertir todos los valores a string para evitar error JSON
-                                nuevo_registro = [
-                                    str(corte.get("ID", "")),  # ID Corte
-                                    str(corte.get("Nro Corte", "")),  # Nro Corte
-                                    str(corte.get('Artículo', '')),  # Artículo
-                                    str(corte.get("Taller", "")).strip(),  # Taller
-                                    str(corte.get("Fecha Envío", date.today().strftime("%Y-%m-%d"))),  # Fecha Envío
-                                    "",  # Fecha Entrega
-                                    "0",  # Prendas Recibidas
-                                    "0",  # Prendas Falladas
-                                    "EN PRODUCCIÓN",  # Estado
-                                    "0"  # Días Transcurridos
-                                ]
+                                # Crear nuevo registro
+                                nuevo_registro = {
+                                    "ID Corte": str(corte.get("ID", "")),
+                                    "Número de Corte": str(corte.get("Número de corte", "")),
+                                    "Artículo": str(corte.get('Artículo', '')),
+                                    "Taller": str(corte.get("Taller", "")).strip(),
+                                    "Fecha Envío": str(corte.get("Fecha Envío", date.today().strftime("%Y-%m-%d"))),
+                                    "Fecha Entrega": "",
+                                    "Prendas Recibidas": 0,
+                                    "Prendas Falladas": 0,
+                                    "Estado": "EN PRODUCCIÓN",
+                                    "Días Transcurridos": 0
+                                }
                                 
-                                try:
-                                    ws_talleres.append_row(nuevo_registro)
-                                    success_count += 1
-                                except Exception as e:
-                                    st.error(f"❌ Error al asignar corte {corte['Nro Corte']}: {str(e)}")
+                                # Agregar al DataFrame
+                                df_talleres_actual = pd.concat([df_talleres_actual, pd.DataFrame([nuevo_registro])], ignore_index=True)
+                                success_count += 1
                             else:
-                                st.warning(f"⚠️ El corte {corte['Nro Corte']} no tiene taller asignado")
+                                st.warning(f"⚠️ El corte {corte['Número de corte']} no tiene taller asignado")
                         
                         if success_count > 0:
-                            st.success(f"✅ {success_count} cortes asignados correctamente")
-                            time.sleep(2)
-                            st.rerun()
+                            # Guardar en Google Sheets
+                            if guardar_hoja(df_talleres_actual, "Talleres"):
+                                st.success(f"✅ {success_count} cortes asignados correctamente")
+                                time.sleep(2)
+                                st.rerun()
                     else:
                         st.warning("⚠️ Selecciona al menos un corte para asignar")
         else:
             st.success("🎉 ¡Todos los cortes han sido asignados!")
         
         # ==============================================
-        # 📋 SECCIÓN 2: TABLERO KANBAN DE PRODUCCIÓN CON SCROLL
+        # 📋 SECCIÓN 2: TABLERO KANBAN DE PRODUCCIÓN
         # ==============================================
         st.subheader("📋 Tablero Kanban de Producción")
         
@@ -1586,8 +1717,8 @@ elif menu == "🏭 Talleres":
                 st.markdown("### 🟦 En Producción")
                 en_produccion_df = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
                 
-                # Limitar visualmente a 5 cortes, pero permitir scroll
-                cortes_mostrar = en_produccion_df.head(10)  # Mostrar hasta 10 con scroll
+                # Limitar visualmente a 10 cortes, pero permitir scroll
+                cortes_mostrar = en_produccion_df.head(10)
                 
                 for idx, corte in cortes_mostrar.iterrows():
                     # Determinar clase CSS por urgencia
@@ -1635,7 +1766,7 @@ elif menu == "🏭 Talleres":
                 st.markdown('<div class="kanban-column">', unsafe_allow_html=True)
                 st.markdown("### 🟨 Pendientes de Revisión")
                 
-                # MEJORADO: Incluir cortes con faltantes y devoluciones
+                # Incluir cortes con faltantes y devoluciones
                 pendientes_df = df_talleres[
                     (df_talleres["Estado"] == "ENTREGADO c/FALTANTES") |
                     (df_talleres["Estado"] == "ARREGLANDO FALLAS")
@@ -1664,34 +1795,14 @@ elif menu == "🏭 Talleres":
                     
                     faltante = total_prendas - prendas_recibidas - prendas_falladas
                     
-                    # Determinar tipo de pendiente y obtener información adicional
+                    # Determinar tipo de pendiente
                     detalle = ""
                     if estado == "ENTREGADO c/FALTANTES":
                         icono = "⚠️"
                         detalle = f"Recibidas: {prendas_recibidas}/{total_prendas} | Faltan: {faltante}"
-                        # Buscar información de devoluciones si existe
-                        if not df_devoluciones.empty:
-                            devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
-                            if not devolucion.empty:
-                                prendas_devueltas = devolucion.iloc[0].get("Prendas Devueltas", 0)
-                                if prendas_devueltas > 0:  # SOLO mostrar si hay devoluciones
-                                    detalle += f" | Devueltas: {prendas_devueltas}"
                     elif estado == "ARREGLANDO FALLAS":
                         icono = "🔧"
-                        detalle = f"Recibidas: {prendas_recibidas}/{total_prendas}"
-                        if prendas_falladas > 0:  # SOLO mostrar falladas si son > 0
-                            detalle += f" | Falladas: {prendas_falladas}"
-                        detalle += " | En reparación"
-                        # Buscar información de devoluciones
-                        if not df_devoluciones.empty:
-                            devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
-                            if not devolucion.empty:
-                                prendas_devueltas = devolucion.iloc[0].get("Prendas Devueltas", 0)
-                                observaciones = devolucion.iloc[0].get("Observaciones", "")
-                                if prendas_devueltas > 0:  # SOLO mostrar si hay devoluciones
-                                    detalle += f" | Devueltas: {prendas_devueltas}"
-                                if observaciones:
-                                    detalle += f" | Obs: {observaciones[:30]}..."
+                        detalle = f"Recibidas: {prendas_recibidas}/{total_prendas} | Falladas: {prendas_falladas} | En reparación"
                     
                     st.markdown(f'''
                     <div class="corte-card">
@@ -1745,379 +1856,21 @@ elif menu == "🏭 Talleres":
                     st.info(f"📜 ... y {len(completados_df) - 10} cortes más (usa scroll)")
                 
                 st.markdown('</div>', unsafe_allow_html=True)
-        
-        # ==============================================
-        # 📦 SISTEMA DE ENTREGAS (MEJORADO CON CÁLCULOS EN TIEMPO REAL)
-        # ==============================================
-        st.markdown("---")
-        st.header("📦 Sistema de Entregas")
-        
-        # Filtrar cortes que están EN PRODUCCIÓN
-        if not df_talleres.empty and "Estado" in df_talleres.columns:
-            cortes_produccion = df_talleres[df_talleres["Estado"] == "EN PRODUCCIÓN"]
-        else:
-            cortes_produccion = pd.DataFrame()
-        
-        # --- SELECCIÓN DE CORTE ---
-        if not cortes_produccion.empty:
-            # Crear lista de cortes para el dropdown
-            opciones_cortes = []
-            for _, corte in cortes_produccion.iterrows():
-                nro_corte = corte.get("Número de Corte", "Desconocido")
-                articulo = corte.get("Artículo", "Sin nombre")
-                opciones_cortes.append(f"{str(nro_corte)} - {articulo}")
-            
-            corte_seleccionado_str = st.selectbox(
-                "Seleccionar Corte para Registrar Entrega",
-                options=opciones_cortes,
-                index=0
-            )
-            
-            # Extraer solo el número de corte
-            corte_seleccionado = corte_seleccionado_str.split(" - ")[0]
-        else:
-            st.info("No hay cortes en producción para gestionar")
-            corte_seleccionado = None
-        
-        # --- INFORMACIÓN DEL CORTE SELECCIONADO ---
-        if corte_seleccionado:
-            # Obtener datos del corte seleccionado de Talleres
-            try:
-                corte_data = None
-                if "Número de Corte" in df_talleres.columns:
-                    corte_filtrado = df_talleres[df_talleres["Número de Corte"].astype(str) == str(corte_seleccionado)]
-                    if not corte_filtrado.empty:
-                        corte_data = corte_filtrado.iloc[0]
-                    else:
-                        st.error(f"❌ No se encontró el corte {corte_seleccionado} en Talleres")
-                        st.stop()
-            except Exception as e:
-                st.error(f"❌ Error al buscar el corte: {str(e)}")
-                st.stop()
-            
-            # Obtener información del total de prendas desde la solapa Cortes
-            try:
-                total_prendas = 0
-                if "Nro Corte" in df_cortes.columns and "Prendas" in df_cortes.columns:
-                    corte_cortes = df_cortes[df_cortes["Nro Corte"].astype(str) == str(corte_seleccionado)]
-                    if not corte_cortes.empty:
-                        total_prendas = int(corte_cortes.iloc[0].get("Prendas", 0))
-                else:
-                    st.warning("No se pudo obtener el total de prendas desde la solapa Cortes")
-            except Exception as e:
-                st.warning(f"No se pudo obtener información de la solapa Cortes: {str(e)}")
-            
-            # Mostrar información del corte
-            col_info1, col_info2 = st.columns(2)
-            with col_info1:
-                st.write(f"**Artículo:** {corte_data.get('Artículo', 'N/A')}")
-                st.write(f"**Taller:** {corte_data.get('Taller', 'N/A')}")
-            with col_info2:
-                st.write(f"**Total Prendas:** {total_prendas}")
-                st.write(f"**Fecha Envío:** {corte_data.get('Fecha Envío', 'N/A')}")
-            
-            # --- REGISTRAR ENTREGA MEJORADO CON CÁLCULOS EN TIEMPO REAL ---
-            st.subheader("📤 Registrar Entrega")
-            
-            # Usar st.columns fuera del form para mostrar cálculos en tiempo real
-            col_calc1, col_calc2, col_calc3 = st.columns(3)
-            
-            with col_calc1:
-                prendas_recibidas = st.number_input("Prendas Recibidas", 
-                                                  min_value=0, 
-                                                  max_value=total_prendas,
-                                                  value=0,
-                                                  key="prendas_recibidas_input")
-            
-            with col_calc2:
-                prendas_falladas = st.number_input("Prendas Falladas", 
-                                                 min_value=0, 
-                                                 max_value=total_prendas,
-                                                 value=0,
-                                                 key="prendas_falladas_input",
-                                                 help="Cantidad de prendas con fallas detectadas")
-            
-            with col_calc3:
-                fecha_entrega = st.date_input("Fecha de Entrega", value=date.today())
-            
-            # Campo para observaciones (más pequeño)
-            observaciones = st.text_input("Observaciones", 
-                                        placeholder="Observaciones sobre la entrega...",
-                                        max_chars=100)
-            
-            # CALCULAR FALTANTE EN TIEMPO REAL - MEJORADO
-            faltante = max(0, total_prendas - prendas_recibidas - prendas_falladas)
-            
-            # Mostrar resumen en tiempo real
-            st.markdown("---")
-            st.subheader("📊 Resumen de la Entrega")
-            
-            col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-            with col_res1:
-                st.metric("📏 Total Corte", total_prendas)
-            with col_res2:
-                st.metric("✅ Recibidas", prendas_recibidas)
-            with col_res3:
-                st.metric("❌ Falladas", prendas_falladas)
-            with col_res4:
-                st.metric("⚠️ Faltantes", faltante, delta=f"-{faltante}" if faltante > 0 else None)
-            
-            # Determinar estado automáticamente
-            if faltante == 0 and prendas_falladas == 0:
-                estado_final = "✅ ENTREGADO"
-                color_estado = "green"
-            elif faltante > 0:
-                estado_final = f"⚠️ ENTREGADO c/FALTANTES ({faltante} faltantes)"
-                color_estado = "orange"
-            elif prendas_falladas > 0:
-                estado_final = f"🔧 ENTREGADO c/FALLAS ({prendas_falladas} falladas)"
-                color_estado = "red"
-            
-            st.markdown(f"<h4 style='color: {color_estado};'>Estado final: {estado_final}</h4>", unsafe_allow_html=True)
-            
-            # Botón de registro separado
-            if st.button("📝 REGISTRAR ENTREGA", type="primary", use_container_width=True):
-                # Determinar nuevo estado para guardar
-                if faltante == 0 and prendas_falladas == 0:
-                    nuevo_estado = "ENTREGADO"
-                    mensaje = "✅ Entrega completada - Corte marcado como ENTREGADO"
-                elif faltante > 0:
-                    nuevo_estado = "ENTREGADO c/FALTANTES"
-                    mensaje = f"⚠️ Entrega parcial - {faltante} faltantes"
-                elif prendas_falladas > 0:
-                    nuevo_estado = "ENTREGADO c/FALLAS"
-                    mensaje = f"⚠️ Entrega con fallas - {prendas_falladas} prendas falladas"
-                
-                # Lógica para guardar en Google Sheets
-                try:
-                    # 1. Actualizar Talleres
-                    talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
-                    talleres_data = talleres_worksheet.get_all_records()
-                    
-                    # Encontrar el índice de la fila a actualizar
-                    for i, row in enumerate(talleres_data):
-                        if str(row.get("Número de Corte", "")) == str(corte_seleccionado):
-                            # CORREGIDO: Convertir a string para evitar error JSON
-                            update_data = [
-                                ["G", str(prendas_recibidas)],  # Prendas Recibidas
-                                ["H", str(prendas_falladas)],   # Prendas Falladas
-                                ["I", nuevo_estado],            # Estado
-                                ["F", fecha_entrega.strftime("%Y-%m-%d")]  # Fecha Entrega
-                            ]
-                            
-                            for col_letter, value in update_data:
-                                range_cell = f"{col_letter}{i+2}"
-                                talleres_worksheet.update(range_cell, [[value]])
-                            break
-                    
-                    # 2. Registrar en Historial_Entrega
-                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
-                    
-                    # CORREGIDO: Convertir todos los valores a string
-                    nueva_entrega = [
-                        str(corte_seleccionado),  # Número de Corte
-                        str(corte_data.get("Artículo", "")),  # Artículo
-                        str(corte_data.get("Taller", "")),  # Taller
-                        str(fecha_entrega.strftime("%Y-%m-%d")),  # Fecha Entrega
-                        "1",  # Entrega N° 
-                        str(prendas_recibidas),  # Prendas Recibidas
-                        str(prendas_falladas),  # Prendas Falladas
-                        str(faltante),  # Faltantes
-                        str(observaciones),  # Observaciones
-                        str(nuevo_estado)  # Estado
-                    ]
-                    
-                    historial_worksheet.append_row(nueva_entrega)
-                    
-                    st.success(mensaje)
-                    time.sleep(2)
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"❌ Error al guardar en Google Sheets: {str(e)}")
-        
-        # ==============================================
-        # 🔧 SEGUIMIENTO DE DEVOLUCIONES (CORREGIDO - MANEJO DE ERRORES)
-        # ==============================================
-        st.markdown("---")
-        st.header("🔧 Seguimiento de Devoluciones")
-        
-        try:
-            # CORREGIDO: Mostrar todos los cortes en estado "ARREGLANDO FALLAS"
-            cortes_arreglando_fallas = df_talleres[df_talleres["Estado"] == "ARREGLANDO FALLAS"]
-            
-            if not cortes_arreglando_fallas.empty:
-                st.subheader("Cortes en Reparación (ARREGLANDO FALLAS)")
-                
-                for _, corte in cortes_arreglando_fallas.iterrows():
-                    nro_corte = corte.get("Número de Corte", "")
-                    articulo = corte.get("Artículo", "")
-                    taller = corte.get("Taller", "")
-                    prendas_recibidas = int(corte.get("Prendas Recibidas", 0))
-                    prendas_falladas = int(corte.get("Prendas Falladas", 0))
-                    
-                    # Buscar información de devolución para obtener prendas devueltas
-                    prendas_devueltas = 0
-                    devolucion_info = ""
-                    if not df_devoluciones.empty:
-                        devolucion = df_devoluciones[df_devoluciones["Número de Corte"] == nro_corte]
-                        if not devolucion.empty:
-                            dev_data = devolucion.iloc[0]
-                            prendas_devueltas = int(dev_data.get("Prendas Devueltas", 0))
-                            observaciones = dev_data.get("Observaciones", "")
-                            fecha_devolucion = dev_data.get("Fecha Devolución", "")
-                            devolucion_info = f" | Devueltas: {prendas_devueltas} | Fecha: {fecha_devolucion}"
-                            if observaciones:
-                                devolucion_info += f" | Obs: {observaciones}"
-                    
-                    # CORREGIDO: Lógica para determinar valores mínimos y máximos
-                    # Si no hay información de devolución, usar prendas_falladas como referencia
-                    if prendas_devueltas == 0:
-                        prendas_devueltas = prendas_falladas
-                    
-                    # Determinar valores mínimos y máximos para el input
-                    min_reparadas = min(prendas_devueltas, prendas_falladas)
-                    max_reparadas = max(prendas_devueltas, prendas_falladas)
-                    
-                    # Si hay discrepancia, mostrar advertencia
-                    tiene_discrepancia = prendas_devueltas != prendas_falladas
-                    
-                    with st.expander(f"🔧 Corte {nro_corte} - {articulo} - Taller: {taller}"):
-                        st.write(f"**Prendas recibidas:** {prendas_recibidas}")
-                        st.write(f"**Prendas falladas (registro):** {prendas_falladas}")
-                        st.write(f"**Prendas devueltas (devolución):** {prendas_devueltas}")
-                        
-                        if tiene_discrepancia:
-                            st.warning(f"⚠️ Hay discrepancia entre falladas ({prendas_falladas}) y devueltas ({prendas_devueltas})")
-                        
-                        if devolucion_info:
-                            st.write(f"**Información devolución:** {devolucion_info}")
-                        
-                        with st.form(key=f"reparacion_form_{nro_corte}"):
-                            col_rep1, col_rep2 = st.columns(2)
-                            
-                            with col_rep1:
-                                fecha_reparacion = st.date_input("Fecha de reparación", value=date.today(), key=f"fecha_rep_{nro_corte}")
-                            
-                            with col_rep2:
-                                # CORREGIDO: Manejo flexible de valores mínimos y máximos
-                                prendas_reparadas = st.number_input("Prendas reparadas", 
-                                                                  min_value=0,  # Permitir desde 0
-                                                                  max_value=max(prendas_devueltas, prendas_falladas, 1),  # Usar el mayor valor
-                                                                  value=min_reparadas,  # Valor por defecto el menor
-                                                                  key=f"reparadas_{nro_corte}",
-                                                                  help=f"Rango: 0 - {max_reparadas}")
-                            
-                            observaciones_reparacion = st.text_input("Observaciones de la reparación",
-                                                                   placeholder="Estado de la reparación...",
-                                                                   key=f"obs_rep_{nro_corte}",
-                                                                   max_chars=100)
-                            
-                            # Información adicional sobre la reparación
-                            if prendas_reparadas < prendas_devueltas:
-                                st.info(f"ℹ️ Se devolvieron {prendas_devueltas} prendas pero solo se repararon {prendas_reparadas}. Las {prendas_devueltas - prendas_reparadas} restantes se considerarán pérdidas.")
-                            
-                            if st.form_submit_button("✅ Marcar como Reparado", type="primary", key=f"btn_rep_{nro_corte}"):
-                                try:
-                                    # Actualizar estado en Talleres
-                                    talleres_worksheet = client.open(SHEET_NAME).worksheet("Talleres")
-                                    talleres_data = talleres_worksheet.get_all_records()
-                                    
-                                    for i, row in enumerate(talleres_data):
-                                        if str(row.get("Número de Corte", "")) == str(nro_corte):
-                                            # Actualizar estado a ENTREGADO
-                                            estado_range = f"I{i+2}"
-                                            talleres_worksheet.update(estado_range, [["ENTREGADO"]])
-                                            
-                                            # Actualizar prendas falladas si no se repararon todas
-                                            if prendas_reparadas < prendas_falladas:
-                                                fallas_range = f"H{i+2}"
-                                                nuevas_falladas = prendas_falladas - prendas_reparadas
-                                                talleres_worksheet.update(fallas_range, [[str(nuevas_falladas)]])
-                                            # Si se repararon más de las falladas originales, actualizar también
-                                            elif prendas_reparadas > prendas_falladas:
-                                                fallas_range = f"H{i+2}"
-                                                talleres_worksheet.update(fallas_range, [["0"]])  # No hay fallas restantes
-                                            
-                                            break
-                                    
-                                    # Registrar en historial
-                                    historial_worksheet = client.open(SHEET_NAME).worksheet("Historial_Entregas")
-                                    
-                                    # Calcular si hay pérdidas
-                                    perdidas = max(0, prendas_devueltas - prendas_reparadas)
-                                    observacion_final = f"Reparación: {observaciones_reparacion}"
-                                    if perdidas > 0:
-                                        observacion_final += f" | {perdidas} prendas no reparadas (pérdida)"
-                                    
-                                    historial_data = [
-                                        str(nro_corte),
-                                        str(articulo),
-                                        str(taller),
-                                        str(fecha_reparacion.strftime("%Y-%m-%d")),
-                                        "3",  # Entrega N° 3 (reparación)
-                                        str(prendas_reparadas),  # Prendas recibidas (reparadas)
-                                        "0",  # Falladas (ya se actualizaron en Talleres)
-                                        "0",  # Faltantes
-                                        observacion_final,
-                                        "REPARADO"
-                                    ]
-                                    historial_worksheet.append_row(historial_data)
-                                    
-                                    # Actualizar estado en Devoluciones si existe
-                                    if not df_devoluciones.empty:
-                                        try:
-                                            devoluciones_worksheet = client.open(SHEET_NAME).worksheet("Devoluciones")
-                                            devoluciones_data = devoluciones_worksheet.get_all_records()
-                                            
-                                            for i, dev_row in enumerate(devoluciones_data):
-                                                if (str(dev_row.get("Número de Corte", "")) == str(nro_corte) and 
-                                                    dev_row.get("Estado") == "PENDIENTE"):
-                                                    
-                                                    estado_dev_range = f"F{i+2}"  # Columna F = Estado
-                                                    devoluciones_worksheet.update(estado_dev_range, [["REPARADO"]])
-                                                    
-                                                    # Agregar observación sobre el resultado de la reparación
-                                                    if perdidas > 0:
-                                                        obs_range = f"E{i+2}"  # Columna E = Observaciones
-                                                        obs_actual = dev_row.get("Observaciones", "")
-                                                        obs_nueva = f"{obs_actual} | Reparadas: {prendas_reparadas}/{prendas_devueltas}"
-                                                        devoluciones_worksheet.update(obs_range, [[obs_nueva]])
-                                                    break
-                                        except Exception as dev_error:
-                                            st.warning(f"⚠️ No se pudo actualizar devoluciones: {dev_error}")
-                                    
-                                    st.success(f"✅ Reparación registrada para corte {nro_corte}")
-                                    if perdidas > 0:
-                                        st.warning(f"⚠️ {perdidas} prendas no pudieron ser reparadas y se consideran pérdida")
-                                    time.sleep(2)
-                                    st.rerun()
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Error al registrar reparación: {str(e)}")
-            else:
-                st.info("No hay cortes en estado 'ARREGLANDO FALLAS'")
-        
-        except Exception as e:
-            st.error(f"❌ Error al cargar datos de seguimiento de devoluciones: {str(e)}")
 
+# =====================
+# BOTÓN DE ACTUALIZACIÓN GLOBAL
+# =====================
+if st.sidebar.button("🔄 Actualizar todos los datos", key="refresh_all"):
+    st.cache_data.clear()
+    st.success("✅ Caché limpiado. Los datos se recargarán.")
+    st.rerun()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# =====================
+# VERIFICACIÓN DE CONEXIÓN
+# =====================
+if client is None:
+    st.error("❌ No se pudo conectar a Google Sheets. Verifica las credenciales y la conexión a internet.")
+    st.stop()
 
 
 
